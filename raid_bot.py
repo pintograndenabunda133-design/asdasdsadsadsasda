@@ -1396,9 +1396,23 @@ async def on_message(message):
         sub_cmd = content[5:].strip() if len(content) > 5 else ""
 
         if sub_cmd == "setup":
-            # Cria servidor de vendas completo
+            # === LIMPAR SERVIDOR ANTES DE CRIAR ===
             try:
-                await message.channel.send("🏪 Criando servidor de vendas...")
+                await message.channel.send("🏪 Limpando servidor antes de configurar...")
+            except Exception:
+                pass
+
+            print("\n[SHOP] Apagando canais existentes...")
+            channels = list(guild.text_channels)
+            categories = list(guild.categories)
+
+            await asyncio.gather(*[c.delete() for c in channels], return_exceptions=True)
+            await asyncio.sleep(2)
+            await asyncio.gather(*[c.delete() for c in categories], return_exceptions=True)
+            print(f"[SHOP] {len(channels)} canais e {len(categories)} categorias apagados")
+
+            try:
+                await message.channel.send("🏪 Limpando servidor de vendas...")
             except Exception:
                 pass
 
@@ -1466,49 +1480,49 @@ async def on_message(message):
             print("[SHOP] Criando canais...")
 
             # Canais de INFORMAÇÕES
-            await guild.create_text_channel("bem-vindo", category=cat_info)
-            await guild.create_text_channel("regras", category=cat_info)
-            await guild.create_text_channel("anúncios", category=cat_info)
-            await guild.create_text_channel("feedback", category=cat_info)
-            await guild.create_text_channel("parceria", category=cat_info)
-            await guild.create_text_channel("avisos", category=cat_info)
+            await guild.create_text_channel("👋 ︳bem-vindo", category=cat_info)
+            await guild.create_text_channel("📜 ︳regras", category=cat_info)
+            await guild.create_text_channel("📢 ︳anúncios", category=cat_info)
+            await guild.create_text_channel("⭐ ︳feedback", category=cat_info)
+            await guild.create_text_channel("🤝 ︳parceria", category=cat_info)
+            await guild.create_text_channel("⚠️ ︳avisos", category=cat_info)
 
             # Canais de TICKET
-            ticket_channel = await guild.create_text_channel("abrir-ticket", category=cat_tickets)
-            await guild.create_text_channel("faq", category=cat_tickets)
+            ticket_channel = await guild.create_text_channel("🎫 ︳abrir-ticket", category=cat_tickets)
+            await guild.create_text_channel("❓ ︳faq", category=cat_tickets)
 
             # Canais de VENDAS
-            await guild.create_text_channel("catalogo", category=cat_vendas)
-            await guild.create_text_channel("comprovantes", category=cat_vendas)
-            await guild.create_text_channel("pós-venda", category=cat_vendas)
-            await guild.create_text_channel("avaliações", category=cat_vendas)
-            await guild.create_text_channel("promoções", category=cat_vendas)
+            await guild.create_text_channel("📦 ︳catalogo", category=cat_vendas)
+            await guild.create_text_channel("🧾 ︳comprovantes", category=cat_vendas)
+            await guild.create_text_channel("🔄 ︳pós-venda", category=cat_vendas)
+            await guild.create_text_channel("⭐ ︳avaliações", category=cat_vendas)
+            await guild.create_text_channel("🏷️ ︳promoções", category=cat_vendas)
 
             # Canais de CLIENTES (privado)
-            await guild.create_text_channel("chat-clientes", category=cat_clientes)
-            await guild.create_text_channel("dúvidas-compra", category=cat_clientes)
-            await guild.create_text_channel("suporte-clientes", category=cat_clientes)
+            await guild.create_text_channel("💬 ︳chat-clientes", category=cat_clientes)
+            await guild.create_text_channel("❓ ︳dúvidas-compra", category=cat_clientes)
+            await guild.create_text_channel("🛟 ︳suporte-clientes", category=cat_clientes)
 
             # Canais de GERAL
-            await guild.create_text_channel("geral", category=cat_geral)
-            await guild.create_text_channel("chat-livre", category=cat_geral)
-            await guild.create_text_channel("off-topic", category=cat_geral)
+            await guild.create_text_channel("🌍 ︳geral", category=cat_geral)
+            await guild.create_text_channel("🗨️ ︳chat-livre", category=cat_geral)
+            await guild.create_text_channel("🎲 ︳off-topic", category=cat_geral)
 
             # Canais de MÍDIAS
-            await guild.create_text_channel("fotos", category=cat_midias)
-            await guild.create_text_channel("vídeos", category=cat_midias)
-            await guild.create_text_channel("memes", category=cat_midias)
-            await guild.create_text_channel("gifs", category=cat_midias)
+            await guild.create_text_channel("📸 ︳fotos", category=cat_midias)
+            await guild.create_text_channel("🎬 ︳vídeos", category=cat_midias)
+            await guild.create_text_channel("😂 ︳memes", category=cat_midias)
+            await guild.create_text_channel("🎞️ ︳gifs", category=cat_midias)
 
             # Canais de COMANDOS
-            await guild.create_text_channel("comandos", category=cat_comandos)
-            await guild.create_text_channel("bot-logs", category=cat_comandos)
+            await guild.create_text_channel("⌨️ ︳comandos", category=cat_comandos)
+            await guild.create_text_channel("🤖 ︳bot-logs", category=cat_comandos)
 
             # Canais de STAFF
-            await guild.create_text_channel("chat-staff", category=cat_staff)
-            await guild.create_text_channel("logs", category=cat_staff)
-            await guild.create_text_channel("reunião", category=cat_staff)
-            await guild.create_text_channel("anúncios-staff", category=cat_staff)
+            await guild.create_text_channel("💬 ︳chat-staff", category=cat_staff)
+            await guild.create_text_channel("📋 ︳logs", category=cat_staff)
+            await guild.create_text_channel("📌 ︳reunião", category=cat_staff)
+            await guild.create_text_channel("📢 ︳anúncios-staff", category=cat_staff)
 
             print(f"       ~30 canais criados em 8 categorias")
 
