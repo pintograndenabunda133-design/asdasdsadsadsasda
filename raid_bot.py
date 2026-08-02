@@ -111,263 +111,141 @@ def save_server_configs(data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-async def audit_restore(guild, log_channel=None):
-    """Restaura servidor usando Discord Audit Log quando não tem backup prévio.
+# Removido: audit_restore (não funciona - Discord não guarda nomes no Audit Log)
+# Use !restore (backup automático) ou !saveconfig para restaurar servidores
+
+
+async def smart_clean_restore(guild):
+    """Restauração inteligente sem backup: apaga canais de raid e cria servidor limpo padrão.
     
-    Estratégia:
-    1. Lê o audit log pra identificar os IDs dos canais apagados
-    2. Tenta buscar os nomes via API (fetch_channel)
-    3. Se não consegue, recria com nomes baseados em IDs
-    4. Apaga canais de raid e recria os originais
+    Usado quando não há backup nem config persistente.
+    Apaga todos os canais/categorias existentes e cria uma estrutura padrão limpa.
     """
     import time
     
-    async def log(msg):
-        """Envia log pro canal do Discord se disponível"""
-        print(f"[AUDIT] {msg}")
-        if log_channel:
-            try:
-                await log_channel.send(msg)
-            except Exception:
-                pass
+    print(f"\n[SMART-RESTORE] Iniciando restauração limpa em: {guild.name} ({guild.id})")
     
-    await log("\n🔍 **Lendo Audit Log do servidor...**")
+    # === FASE 1: Apagar todos os canais e categorias existentes ===
+    print("[SMART-RESTORE] Apagando canais e categorias...")
     
-    # Buscar o bot que fez o raid no audit log
-    raid_bot = None
-    raid_bot_id = None
-    channel_deletions = []
-    channel_creations = []
+    all_items = list(guild.channels)
+    deleted_channels = 0
+    deleted_cats = 0
     
-    try:
-        async for entry in guild.audit_logs(action=discord.AuditLogAction.channel_delete, limit=200):
-            channel_deletions.append(entry)
-    except Exception as e:
-        await log(f"❌ **Erro ao ler deleções:** {e}")
-        return False, "❌ **Erro:** Não tenho permissão pra ler o Audit Log. Preciso da permissão **Ver o audit log**."
-    
-    try:
-        async for entry in guild.audit_logs(action=discord.AuditLogAction.channel_create, limit=200):
-            channel_creations.append(entry)
-    except Exception as e:
-        await log(f"⚠️ Erro ao ler criações: {e}")
-    
-    await log(f"📊 Deleções encontradas: **{len(channel_deletions)}**")
-    await log(f"📊 Criações encontradas: **{len(channel_creations)}**")
-    
-    if not channel_deletions:
-        return False, "❌ **Nenhum canal apagado encontrado no Audit Log.** O servidor pode não ter sido raidado ou o log já expirou."
-    
-    # Identificar o bot que fez o raid (o que mais apagou canais)
-    deletion_counts = {}
-    for entry in channel_deletions:
-        user_id = entry.user.id if entry.user else 0
-        deletion_counts[user_id] = deletion_counts.get(user_id, 0) + 1
-    
-    # Mostrar quem apagou o quê
-    for uid, count in sorted(deletion_counts.items(), key=lambda x: x[1], reverse=True):
-        user = guild.get_member(uid)
-        name = user.mention if user else f"Usuário ID `{uid}`"
-        await log(f"  • {name} — apagou **{count}** canais")
-    
-    # O bot que mais apagou canais provavelmente é o raider
-    if deletion_counts:
-        raid_bot_id = max(deletion_counts, key=deletion_counts.get)
-        raid_bot = guild.get_member(raid_bot_id)
-        bot_name = raid_bot.mention if raid_bot else f"ID `{raid_bot_id}`"
-        await log(f"\n🤖 **Bot raider identificado:** {bot_name}** (apagou {deletion_counts[raid_bot_id]} canais)")
-    
-    # === COLETAR IDs DOS CANAIS APROGADOS ===
-    # O Audit Log retorna Object sem nome, mas com ID
-    deleted_channel_ids = []
-    for entry in channel_deletions:
-        target = entry.target
-        if hasattr(target, 'id'):
-            deleted_channel_ids.append(target.id)
-    
-    await log(f"\n📋 **IDs de canais apagados:** {len(deleted_channel_ids)}")
-    
-    # === TENTAR BUSCAR NOMES VIA API ===
-    await log("\n🔎 **Tentando buscar nomes dos canais via API...**")
-    
-    original_channels = []
-    resolved_names = 0
-    unresolved_ids = []
-    
-    for ch_id in deleted_channel_ids:
-        ch_name = None
-        ch_type = "text"
-        ch_position = 0
-        ch_category_id = None
-        
-        # Tentativa 1: buscar via API (fetch_channel)
+    # Apagar em paralelo
+    async def delete_item(item):
         try:
-            ch = await bot.fetch_channel(ch_id)
-            if ch:
-                ch_name = ch.name
-                ch_position = ch.position
-                if hasattr(ch, 'category') and ch.category:
-                    ch_category_id = ch.category.id
-                    try:
-                        cat = await bot.fetch_channel(ch.category.id)
-                        if cat:
-                            ch_category_name = cat.name
-                        else:
-                            ch_category_name = None
-                    except Exception:
-                        ch_category_name = None
-                    ch_category_name = getattr(ch.category, 'name', None)
-                else:
-                    ch_category_name = None
-                
-                if isinstance(ch, discord.VoiceChannel):
-                    ch_type = "voice"
-                elif isinstance(ch, discord.TextChannel):
-                    ch_type = "text"
-                
-                resolved_names += 1
-                await log(f"  ✅ Resolvido: {ch.name} (id: {ch_id})")
+            await item.delete()
+            return True
         except Exception:
-            # Canal não existe mais ou sem permissão
-            unresolved_ids.append(ch_id)
-        
-        if ch_name is None:
-            # Tentativa 2: usar entry.changes para pegar info
-            for entry in channel_deletions:
-                if hasattr(entry.target, 'id') and entry.target.id == ch_id:
-                    try:
-                        for change in entry.changes:
-                            if change.key == 'name' and change.after:
-                                ch_name = change.after
-                            elif change.key == 'position' and change.after:
-                                ch_position = change.after
-                    except Exception:
-                        pass
-                    break
-        
-        if ch_name:
-            original_channels.append({
-                "name": ch_name,
-                "type": ch_type,
-                "category_id": ch_category_id,
-                "category_name": getattr(ch, 'category', None) and getattr(ch.category, 'name', None) or None,
-                "position": ch_position,
-            })
-        else:
-            # Pular — não conseguimos resolver o nome
-            pass
+            return False
     
-    await log(f"\n📁 **Canais resolvidos:** {resolved_names} / {len(deleted_channel_ids)}")
-    if unresolved_ids:
-        await log(f"⚠️ **Canais não resolvidos:** {len(unresolved_ids)} (Discord não guarda nome no Audit Log)")
+    tasks = [delete_item(item) for item in all_items]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
     
-    # Identificar canais de raid (criados após o raid)
-    raid_channels = []
-    if raid_bot_id:
-        for entry in channel_creations:
-            if entry.user and entry.user.id == raid_bot_id:
-                raid_channels.append(entry.target)
+    for r, item in zip(results, all_items):
+        if r is True:
+            if isinstance(item, discord.CategoryChannel):
+                deleted_cats += 1
+            else:
+                deleted_channels += 1
     
-    await log(f"🚨 **Canais de raid identificados:** {len(raid_channels)}")
+    print(f"       {deleted_channels} canais apagados")
+    print(f"       {deleted_cats} categorias apagadas")
     
-    if not original_channels:
-        return False, (
-            "❌ **Não consegui recuperar os nomes dos canais apagados.**\n"
-            "O Discord **não guarda nomes** no Audit Log de deleção (só o ID).\n\n"
-            "**Soluções:**\n"
-            "• Se o bot já esteve no servidor antes, use `!restore` (usa backup salvo)\n"
-            "• Se nunca esteve, use `!shop setup` pra criar novo servidor\n"
-            "• Ou me diga os nomes dos canais originais e eu crio manualmente"
-        )
+    # Esperar o Discord processar
+    await asyncio.sleep(3)
     
-    # Mostrar canais que vamos recriar
-    await log("\n📋 **Canais que vou recriar:**")
-    for ch in original_channels[:15]:
-        await log(f"  • {ch['name']} ({ch['type']}, cat: {ch['category_name'] or 'sem categoria'})")
-    if len(original_channels) > 15:
-        await log(f"  ... e mais {len(original_channels) - 15} canais")
+    # === FASE 2: Criar categorias padrão ===
+    print("[SMART-RESTORE] Criando categorias padrão...")
     
-    # === FASE 1: Apagar canais de raid ===
-    await log("\n🗑️ **FASE 1: Apagando canais de raid...**")
+    categories_data = [
+        ("INFORMAÇÕES", 0),
+        ("COMUNIDADE", 1),
+        ("VENDAS", 2),
+        ("Voz", 3),
+    ]
     
-    if raid_channels:
-        await asyncio.gather(*[c.delete() for c in raid_channels], return_exceptions=True)
-        await log(f"  ✅ {len(raid_channels)} canais de raid apagados")
-    else:
-        # Se não identificamos o raider, apaga tudo que está no servidor agora
-        channels_to_delete = list(guild.text_channels) + list(guild.voice_channels)
-        await asyncio.gather(*[c.delete() for c in channels_to_delete], return_exceptions=True)
-        await log(f"  ✅ {len(channels_to_delete)} canais apagados (sem raider identificado)")
-    
-    await asyncio.sleep(2)
-    
-    # === FASE 2: Recriar canais originais ===
-    await log("\n🔨 **FASE 2: Recriando canais originais...**")
-    
-    # Primeiro recriar categorias
-    created_categories = {}
-    categories_to_create = set()
-    for ch in original_channels:
-        if ch["category_name"]:
-            categories_to_create.add(ch["category_name"])
-    
-    if categories_to_create:
-        await log(f"  📁 Criando {len(categories_to_create)} categorias...")
-    
-    for cat_name in sorted(categories_to_create):
+    cat_map = {}
+    for cat_name, position in categories_data:
         try:
             cat = await guild.create_category(cat_name)
-            created_categories[cat_name] = cat
-            await log(f"  ✅ Categoria: {cat_name}")
+            cat_map[cat_name] = cat
+            print(f"       Categoria criada: {cat_name}")
         except Exception as e:
-            await log(f"  ❌ Erro ao criar categoria {cat_name}: {e}")
+            print(f"       Erro ao criar categoria {cat_name}: {e}")
     
-    # Depois recriar canais
-    recreated = 0
-    errors = 0
-    for ch in sorted(original_channels, key=lambda x: x["position"]):
+    # === FASE 3: Criar canais padrão ===
+    print("[SMART-RESTORE] Criando canais padrão...")
+    
+    channels_data = [
+        # INFORMAÇÕES
+        ("👋︳bem-vindo", "INFORMAÇÕES", "text", None),
+        ("📜︳regras", "INFORMAÇÕES", "text", None),
+        ("❓︳faq", "INFORMAÇÕES", "text", None),
+        ("📦︳catalogo", "INFORMAÇÕES", "text", None),
+        ("📢︳anuncios", "INFORMAÇÕES", "text", None),
+        
+        # COMUNIDADE
+        ("💬︳chat-geral", "COMUNIDADE", "text", None),
+        ("📸︳midias", "COMUNIDADE", "text", None),
+        ("⌨️︳comandos", "COMUNIDADE", "text", None),
+        
+        # VENDAS
+        ("🎫︳tickets", "VENDAS", "text", None),
+        ("🧾︳comprovantes", "VENDAS", "text", None),
+        
+        # VOZ
+        ("🔊︳Voz 1", "Voz", "voice", None),
+        ("🔊︳Voz 2", "Voz", "voice", None),
+    ]
+    
+    created_channels = 0
+    created_errors = 0
+    
+    for ch_name, cat_name, ch_type, topic in channels_data:
+        cat = cat_map.get(cat_name)
         try:
-            cat = None
-            if ch["category_name"] and ch["category_name"] in created_categories:
-                cat = created_categories[ch["category_name"]]
-            
-            if ch["type"] == "voice":
-                await guild.create_voice_channel(ch["name"], category=cat)
+            if ch_type == "voice":
+                await guild.create_voice_channel(ch_name, category=cat)
             else:
-                await guild.create_text_channel(ch["name"], category=cat)
-            recreated += 1
+                await guild.create_text_channel(ch_name, category=cat, topic=topic)
+            created_channels += 1
         except Exception as e:
-            errors += 1
-            await log(f"  ❌ Erro ao criar {ch['name']}: {e}")
+            created_errors += 1
+            print(f"       Erro ao criar {ch_name}: {e}")
     
-    await log(f"\n  ✅ {recreated} canais recriados com sucesso")
-    if errors > 0:
-        await log(f"  ❌ {errors} erros ao criar canais")
+    print(f"       {created_channels} canais criados")
     
-    # === FASE 3: Salvar config atual ===
-    await log("\n💾 **FASE 3: Salvando config...**")
+    # === FASE 4: Salvar config automaticamente ===
+    print("[SMART-RESTORE] Salvando config...")
     try:
         await save_server_config(guild)
-        await log("  ✅ Config salva automaticamente!")
+        print("       Config salva!")
     except Exception as e:
-        await log(f"  ❌ Erro ao salvar config: {e}")
+        print(f"       Erro ao salvar config: {e}")
     
-    # Resumo final
+    # Resumo
     msg = (
-        f"\n✅ **Recuperação via Audit Log CONCLUÍDA!**\n\n"
-        f"📋 **Relatório Final:**\n"
-        f"• Canais apagados encontrados: **{len(deleted_channel_ids)}**\n"
-        f"• Canais com nome resolvido: **{resolved_names}**\n"
-        f"• Canais sem nome (ignorados): **{len(unresolved_ids)}**\n"
-        f"• Canais de raid apagados: **{len(raid_channels) if raid_channels else 'todos'}**\n"
-        f"• Canais recriados: **{recreated}**\n"
-        f"• Categorias recriadas: **{len(created_categories)}**\n"
-        f"• Erros: **{errors}**\n"
-        f"\n"
-        f"💾 Config salva automaticamente!"
+        f"♻️ **Restauração LIMPA CONCLUÍDA!**\n\n"
+        f"📋 **Relatório:**\n"
+        f"• Canais apagados: **{deleted_channels}**\n"
+        f"• Categorias apagadas: **{deleted_cats}**\n"
+        f"• Categorias criadas: **{len(cat_map)}**\n"
+        f"• Canais criados: **{created_channels}**\n"
+        f"• Erros: **{created_errors}**\n\n"
+        f"📁 **Estrutura criada:**\n"
+        f"• INFORMAÇÕES: bem-vindo, regras, FAQ, catálogo, anúncios\n"
+        f"• COMUNIDADE: chat-geral, mídias, comandos\n"
+        f"• VENDAS: tickets, comprovantes\n"
+        f"• VOZ: 2 canais de voz\n\n"
+        f"💾 Config salva automaticamente!\n\n"
+        f"⚠️ **Atenção:** Nenhum backup foi encontrado.\n"
+        f"Este é um servidor limpo com estrutura padrão.\n"
+        f"Use `!saveconfig` após ajustar para salvar como base."
     )
     
-    await log(msg)
+    print(f"\n[SMART-RESTORE] CONCLUÍDO! {created_channels} canais criados")
     return True, msg
 
 
@@ -1649,52 +1527,52 @@ async def on_message(message):
             except Exception:
                 pass
             return
-        try:
-            await message.channel.send("♻️ Restaurando com permissões...")
-        except Exception:
-            pass
 
-        # Tenta primeiro o backup local, depois o config persistente
-        if os.path.exists(BACKUP_FILE):
+        print(f"\n[RESTORE] Iniciando restauração SMART no servidor: {guild.name}")
+
+        # FASE 1: Verificar se tem backup local
+        has_local_backup = os.path.exists(BACKUP_FILE)
+        # FASE 2: Verificar se tem config persistente
+        configs = load_server_configs()
+        has_config = str(guild.id) in configs.get("servers", {})
+
+        if has_local_backup:
+            # Método 1: Backup local (mais completo)
+            try:
+                await message.channel.send("♻️ **Modo SMART — Restaurando do backup local...**")
+            except Exception:
+                pass
+            print("[RESTORE] Usando backup local...")
             success, msg = await restore_backup(guild)
-        else:
+
+        elif has_config:
+            # Método 2: Config persistente (funciona mesmo sem backup local)
+            try:
+                await message.channel.send("♻️ **Modo SMART — Restaurando do config persistente...**")
+            except Exception:
+                pass
+            print("[RESTORE] Usando config persistente...")
             success, msg = await restore_from_config(guild)
+
+        else:
+            # Método 3: SEM BACKUP — Cria servidor limpo padrão
+            try:
+                await message.channel.send(
+                    "♻️ **Modo SMART — Nenhum backup encontrado!**\n"
+                    "🔨 Criando servidor limpo com canais padrão..."
+                )
+            except Exception:
+                pass
+            print("[RESTORE] Nenhum backup encontrado! Criando servidor limpo...")
+            success, msg = await smart_clean_restore(guild)
+
         try:
             await message.channel.send(msg if success else f"❌ {msg}")
         except Exception:
             pass
 
-    # ---- !audit-restore (SÓ OWNER) — Restaura via Audit Log quando não tem backup ----
-    elif content == "!audit-restore":
-        if not is_owner:
-            try:
-                await message.channel.send("🔒 **Apenas o dono pode usar este comando!**")
-            except Exception:
-                pass
-            return
-
-        print("\n[AUDIT] ================================")
-        print(f"[AUDIT] !audit-restore chamado por {message.author.name} (ID: {message.author.id})")
-        print(f"[AUDIT] Servidor: {guild.name} (ID: {guild.id})")
-        print(f"[AUDIT] Permissão admin: {message.author.guild_permissions.administrator}")
-        print("[AUDIT] ================================")
-
-        try:
-            await message.channel.send("🔍 Analisando Audit Log do servidor...")
-        except Exception as e:
-            print(f"[AUDIT] Erro ao enviar mensagem inicial: {e}")
-
-        try:
-            success, msg = await audit_restore(guild, log_channel=message.channel)
-            print(f"[AUDIT] Resultado: success={success}")
-        except Exception as e:
-            print(f"[AUDIT] ERRO CRÍTICO: {e}")
-            import traceback
-            traceback.print_exc()
-            try:
-                await message.channel.send(f"❌ **Erro crítico:** {e}")
-            except Exception:
-                pass
+    # !audit-restore foi removido (Discord não guarda nomes no Audit Log)
+    # Use !restore (backup automático) ou !saveconfig
 
     # ---- !saveconfig (SÓ OWNER) — Atualiza config manualmente ----
     elif content == "!saveconfig":
@@ -2299,7 +2177,7 @@ async def on_message(message):
                 "!saveconfig    — Atualizar config manual\n"
                 "!configs       — Painel de servidores salvos\n"
                 "!restore       — Restaurar (backup ou config auto)\n"
-                "!audit-restore — Restaurar via Audit Log (sem backup)\n"
+
                 "!shop setup    — Cria servidor de vendas completo\n"
                 "```\n"
                 "**🏪 Shop:**\n"
