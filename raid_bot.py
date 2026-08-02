@@ -1388,7 +1388,303 @@ async def on_message(message):
         except Exception:
             pass
 
+    # ---- !shop (SÓ OWNER) — Cria servidor de vendas completo ----
+    elif content.startswith("!shop"):
+        if not is_owner:
+            return
+
+        sub_cmd = content[5:].strip() if len(content) > 5 else ""
+
+        if sub_cmd == "setup":
+            # Cria servidor de vendas completo
+            try:
+                await message.channel.send("🏪 Criando servidor de vendas...")
+            except Exception:
+                pass
+
+            print("\n[SHOP] Criando servidor de vendas...")
+
+            # === CARGOS ===
+            print("[SHOP] Criando cargos...")
+            role_staff = await guild.create_role(name="Staff", color=discord.Color.gold(), hoist=True, mentionable=False)
+            role_vendedor = await guild.create_role(name="Vendedor", color=discord.Color.blue(), hoist=True, mentionable=False)
+            role_cliente = await guild.create_role(name="Cliente", color=discord.Color.green(), hoist=True, mentionable=False)
+            role_ticket_staff = await guild.create_role(name="Ticket Staff", color=discord.Color.purple(), hoist=True, mentionable=False)
+            print(f"       4 cargos criados: Staff, Vendedor, Cliente, Ticket Staff")
+
+            # === CATEGORIAS ===
+            print("[SHOP] Criando categorias...")
+
+            # Categoria: INFORMAÇÕES
+            cat_info = await guild.create_category("ℹ️ INFORMAÇÕES")
+            # Permissão: onlyeveryone pode ver
+            everyone_role = guild.default_role
+            await cat_info.set_permissions(everyone_role, read_messages=True, send_messages=False)
+            await cat_info.set_permissions(role_staff, send_messages=True)
+
+            # Categoria: VENDAS
+            cat_vendas = await guild.create_category("💰 VENDAS")
+            await cat_vendas.set_permissions(everyone_role, read_messages=True, send_messages=False)
+            await cat_vendas.set_permissions(role_staff, send_messages=True)
+            await cat_vendas.set_permissions(role_vendedor, send_messages=True)
+
+            # Categoria: TICKETS
+            cat_tickets = await guild.create_category("🎫 TICKETS")
+            await cat_tickets.set_permissions(everyone_role, read_messages=False)
+            await cat_tickets.set_permissions(role_staff, read_messages=True, send_messages=True, manage_channels=True)
+            await cat_tickets.set_permissions(role_ticket_staff, read_messages=True, send_messages=True, manage_channels=True)
+
+            # Categoria: STAFF
+            cat_staff = await guild.create_category("🔒 STAFF")
+            await cat_staff.set_permissions(everyone_role, read_messages=False, send_messages=False)
+            await cat_staff.set_permissions(role_staff, read_messages=True, send_messages=True)
+            await cat_staff.set_permissions(role_vendedor, read_messages=True, send_messages=True)
+
+            # === CANAIS ===
+            print("[SHOP] Criando canais...")
+
+            # Canais de INFORMAÇÕES
+            await guild.create_text_channel("bem-vindo", category=cat_info,
+                topic="Regras e boas-vindas do servidor")
+            await guild.create_text_channel("regras", category=cat_info,
+                topic="Leia as regras antes de comprar!")
+            await guild.create_text_channel("anúncios", category=cat_info,
+                topic="Anúncios e novidades")
+            await guild.create_text_channel("feedback", category=cat_info,
+                topic="Deixe seu feedback!")
+
+            # Canais de VENDAS
+            await guild.create_text_channel("pós-venda", category=cat_vendas,
+                topic="Dúvidas após a compra")
+            await guild.create_text_channel("comprovantes", category=cat_vendas,
+                topic="Envie comprovantes aqui")
+            await guild.create_text_channel("catalogo", category=cat_vendas,
+                topic="Veja nossos produtos")
+
+            # Canal de abrir ticket
+            ticket_channel = await guild.create_text_channel("abrir-ticket",
+                category=cat_tickets,
+                topic="Clique no 🎫 para abrir um ticket")
+
+            # Canal de logs
+            await guild.create_text_channel("logs", category=cat_staff,
+                topic="Registro de tickets")
+
+            # Canal de chat staff
+            await guild.create_text_channel("chat-staff", category=cat_staff,
+                topic="Chat privado da staff")
+
+            print(f"       10 canais criados em 4 categorias")
+
+            # === PAINEL DO TICKET ===
+            print("[SHOP] Criando painel de tickets...")
+            ticket_embed = discord.Embed(
+                title="🎫 Abrir Ticket",
+                description=(
+                    "**Bem-vindo ao suporte!**\n\n"
+                    "Para abrir um ticket, clique no botão abaixo 👇\n\n"
+                    "📋 **Como funciona:**\n"
+                    "1. Clique em **Abrir Ticket**\n"
+                    "2. Um canal privado será criado pra você\n"
+                    "3. A staff vai te atender lá\n\n"
+                    "⚠️ **Regras:**\n"
+                    "• Seja educado com a staff\n"
+                    "• Explique seu problema com detalhes\n"
+                    "• Tickets falsos serão fechados"
+                ),
+                color=discord.Color.purple()
+            )
+            ticket_embed.set_footer(text="Miyaguru Shop — Suporte 24/7")
+
+            try:
+                view = TicketView()
+                await ticket_channel.send(embed=ticket_embed, view=view)
+            except Exception:
+                await ticket_channel.send(
+                    "🎫 **Para abrir um ticket, digite:** `!ticket abrir`\n"
+                    "Um canal privado será criado pra você!"
+                )
+
+            # === MENSAGEM DE BOAS-VINDAS ===
+            bem_vindo_channel = discord.utils.get(guild.text_channels, name="bem-vindo")
+            if bem_vindo_channel:
+                welcome_embed = discord.Embed(
+                    title="👋 Bem-vindo!",
+                    description=(
+                        "Obrigado por entrar no nosso servidor!\n\n"
+                        "📋 **Primeiros passos:**\n"
+                        "1. Leia as <#{}> 📜\n"
+                        "2. Veja o <#{}> 📦\n"
+                        "3. Precisa de ajuda? Abra um <#{}> 🎫\n\n"
+                        "**Serviços disponíveis:**\n"
+                        "• Recuperação de servidor raidado — **R$2**\n"
+                        "• Configuração de bot Discord — **R$5**\n"
+                        "• Consultoria Discord — **R$10**\n\n"
+                        "Abra um ticket pra comprar!"
+                    ).format(
+                        discord.utils.get(guild.text_channels, name="regras").id if discord.utils.get(guild.text_channels, name="regras") else 0,
+                        discord.utils.get(guild.text_channels, name="catalogo").id if discord.utils.get(guild.text_channels, name="catalogo") else 0,
+                        discord.utils.get(guild.text_channels, name="abrir-ticket").id if discord.utils.get(guild.text_channels, name="abrir-ticket") else 0,
+                    ),
+                    color=discord.Color.blue()
+                )
+                try:
+                    await bem_vindo_channel.send(embed=welcome_embed)
+                except Exception:
+                    pass
+
+            print("[SHOP] Servidor de vendas criado com sucesso!")
+
+            try:
+                await message.channel.send(
+                    "🏪 **Servidor de vendas criado com sucesso!**\n\n"
+                    "📁 **Categorias criadas:**\n"
+                    "• ℹ️ INFORMAÇÕES — Bem-vindo, regras, anúncios, feedback\n"
+                    "• 💰 VENDAS — Pós-venda, comprovantes, catálogo\n"
+                    "• 🎫 TICKETS — Canal de abrir ticket + canais privados\n"
+                    "• 🔒 STAFF — Chat privado + logs\n\n"
+                    "🎫 **Sistema de Tickets:**\n"
+                    "• Clientes clicam no botão em #abrir-ticket\n"
+                    "• Canal privado é criado automaticamente\n"
+                    "• Staff pode fechar com botão\n\n"
+                    "👥 **Cargos criados:**\n"
+                    "• Staff (dourado) — Admin do servidor\n"
+                    "• Vendedor (azul) — Atende tickets\n"
+                    "• Cliente (verde) — Compradores\n"
+                    "• Ticket Staff (roxo) — Só tickets\n\n"
+                    "**Pronto pra vender!** 🚀"
+                )
+            except Exception:
+                pass
+            return
+
+        elif sub_cmd == "help":
+            try:
+                await message.channel.send(
+                    "🏪 **Comandos de Shop (Só Owner):**\n\n"
+                    "`````\n"
+                    "!shop setup    — Cria servidor de vendas completo\n"
+                    "!shop help     — Esta ajuda\n"
+                    "!ticket abrir  — Abre um ticket (clientes)\n"
+                    "!ticket fechar — Fecha o ticket atual (staff)\n"
+                    "`````"
+                )
+            except Exception:
+                pass
+            return
+
+        elif sub_cmd == "":
+            try:
+                await message.channel.send(
+                    "🏪 **Comando !shop**\n\n"
+                    "`````\n"
+                    "!shop setup    — Cria servidor de vendas completo\n"
+                    "!shop help     — Ver ajuda\n"
+                    "`````"
+                )
+            except Exception:
+                pass
+            return
+
+    # ---- !ticket (Tickets) ----
+    elif content.startswith("!ticket"):
+        sub_cmd = content[7:].strip()
+
+        if sub_cmd == "abrir":
+            # Verifica se o canal é dentro de uma categoria de ticket
+            if message.channel.category and "ticket" in message.channel.category.name.lower():
+                try:
+                    await message.reply("❌ Você já está em um ticket!")
+                except Exception:
+                    pass
+                return
+
+            # Cria canal privado
+            ticket_number = len([c for c in guild.text_channels if f"ticket-{message.author.id}" in c.name])
+            channel_name = f"ticket-{message.author.name}-{ticket_number + 1}"
+
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                message.author: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                role_staff: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            }
+            if role_ticket_staff:
+                overwrites[role_ticket_staff] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+
+            try:
+                cat_tickets = discord.utils.get(guild.categories, name="🎫 TICKETS")
+                new_channel = await guild.create_text_channel(
+                    name=channel_name,
+                    category=cat_tickets,
+                    overwrites=overwrites
+                )
+                embed = discord.Embed(
+                    title=f"🎫 Ticket de {message.author.display_name}",
+                    description=(
+                        f"Bem-vindo, {message.author.mention}!\n\n"
+                        f"Descreva seu problema aqui e a staff vai te ajudar.\n\n"
+                        f"Para fechar o ticket, use `!ticket fechar`"
+                    ),
+                    color=discord.Color.purple()
+                )
+                embed.set_footer(text=f"ID: {message.author.id}")
+                await new_channel.send(embed=embed)
+
+                try:
+                    await message.reply(f"🎫 Ticket criado: {new_channel.mention}")
+                except Exception:
+                    pass
+
+                # Log
+                log_channel = discord.utils.get(guild.text_channels, name="logs")
+                if log_channel:
+                    await log_channel.send(
+                        f"🎫 **Ticket aberto**\n"
+                        f"👤 Usuário: {message.author.mention} (`{message.author.id}`)\n"
+                        f"📁 Canal: {new_channel.mention}"
+                    )
+            except Exception as e:
+                print(f"[TICKET] Erro ao criar: {e}")
+                try:
+                    await message.reply(f"❌ Erro ao criar ticket: {e}")
+                except Exception:
+                    pass
+            return
+
+        elif sub_cmd == "fechar":
+            # Só staff pode fechar
+            is_staff = any(r.name in ["Staff", "Vendedor", "Ticket Staff"] for r in message.author.roles)
+            if not is_staff and not is_owner:
+                try:
+                    await message.channel.send("❌ Só a staff pode fechar tickets!")
+                except Exception:
+                    pass
+                return
+
+            # Log antes de fechar
+            log_channel = discord.utils.get(guild.text_channels, name="logs")
+            if log_channel:
+                messages = await message.channel.history(limit=100).flatten()
+                transcript_lines = []
+                for msg in reversed(messages):
+                    transcript_lines.append(f"[{msg.author}] {msg.content}")
+                transcript = "\n".join(transcript_lines[:50])
+                embed = discord.Embed(
+                    title=f"📋 Transcript do ticket",
+                    description=f"```\n{transcript[:1900]}\n```",
+                    color=discord.Color.red()
+                )
+                embed.set_footer(text=f"Canal: {message.channel.name} | Por: {message.author}")
+                try:
+                    await log_channel.send(embed=embed)
+                except Exception:
+                    pass
+
+            await message.channel.delete()
+            return
+
     # ---- !help / !info ----
+
     elif content == "!help" or content == "!info":
         if is_owner:
             help_text = (
@@ -1405,6 +1701,12 @@ async def on_message(message):
                 "!saveconfig    — Atualizar config manual\n"
                 "!configs       — Painel de servidores salvos\n"
                 "!restore       — Restaurar (backup ou config auto)\n"
+                "!shop setup    — Cria servidor de vendas completo\n"
+                "```\n"
+                "**🏪 Shop:**\n"
+                "```\n"
+                "!ticket abrir  — Abre um ticket\n"
+                "!ticket fechar — Fecha ticket (staff)\n"
                 "```\n"
                 "**🔑 Comandos de Key (Só Owner):**\n"
                 "```\n"
@@ -1435,6 +1737,8 @@ async def on_message(message):
                 "!raid stop     — Para o raid/nuke\n"
                 "!backup        — Backup com permissões\n"
                 "!restore       — Restaurar (backup ou config auto)\n"
+                "!shop setup    — Cria servidor de vendas\n"
+                "!ticket abrir  — Abre um ticket\n"
                 "!help          — Esta ajuda\n"
                 "```"
             )
@@ -1442,6 +1746,100 @@ async def on_message(message):
             await message.channel.send(help_text)
         except Exception:
             pass
+
+
+class TicketView(discord.ui.View):
+    """Botão de abrir ticket"""
+    @discord.ui.button(label="🎫 Abrir Ticket", style=discord.ButtonStyle.primary)
+    async def open_ticket(self, button: discord.ui.Button, interaction: discord.Interaction):
+        guild = interaction.guild
+        if not guild:
+            return
+
+        # Verifica se já tem ticket
+        ticket_channels = [c for c in guild.text_channels
+                          if f"ticket-{interaction.user.name}" in c.name]
+        if ticket_channels:
+            await interaction.response.send_message(
+                "❌ Você já tem um ticket aberto!",
+                ephemeral=True
+            )
+            return
+
+        # Cria canal privado
+        ticket_number = len(ticket_channels) + 1
+        channel_name = f"ticket-{interaction.user.name}-{ticket_number}"
+
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            discord.utils.get(guild.roles, name="Staff"): discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            discord.utils.get(guild.roles, name="Ticket Staff"): discord.PermissionOverwrite(read_messages=True, send_messages=True),
+        }
+
+        try:
+            cat_tickets = discord.utils.get(guild.categories, name="🎫 TICKETS")
+            new_channel = await guild.create_text_channel(
+                name=channel_name,
+                category=cat_tickets,
+                overwrites=overwrites
+            )
+            embed = discord.Embed(
+                title=f"🎫 Ticket de {interaction.user.display_name}",
+                description=(
+                    f"Bem-vindo, {interaction.user.mention}!\n\n"
+                    f"Descreva seu problema aqui e a staff vai te ajudar.\n\n"
+                    f"Para fechar o ticket, use `!ticket fechar`"
+                ),
+                color=discord.Color.purple()
+            )
+            embed.set_footer(text=f"ID: {interaction.user.id}")
+            await new_channel.send(embed=embed)
+
+            await interaction.response.send_message(
+                f"✅ Ticket criado: {new_channel.mention}",
+                ephemeral=True
+            )
+
+            # Log
+            log_channel = discord.utils.get(guild.text_channels, name="logs")
+            if log_channel:
+                await log_channel.send(
+                    f"🎫 **Ticket aberto**\n"
+                    f"👤 Usuário: {interaction.user.mention} (`{interaction.user.id}`)\n"
+                    f"📁 Canal: {new_channel.mention}"
+                )
+        except Exception as e:
+            print(f"[TICKET] Erro ao criar: {e}")
+            await interaction.response.send_message(
+                f"❌ Erro ao criar ticket!",
+                ephemeral=True
+            )
+
+    @discord.ui.button(label="❌ Fechar Ticket", style=discord.ButtonStyle.danger)
+    async def close_ticket(self, button: discord.ui.Button, interaction: discord.Interaction):
+        is_staff = any(r.name in ["Staff", "Vendedor", "Ticket Staff"] for r in interaction.user.roles)
+        if not is_staff:
+            await interaction.response.send_message("❌ Só a staff pode fechar tickets!", ephemeral=True)
+            return
+
+        log_channel = discord.utils.get(interaction.guild.text_channels, name="logs")
+        if log_channel:
+            try:
+                messages = await interaction.channel.history(limit=100).flatten()
+                transcript_lines = [f"[{msg.author}] {msg.content}" for msg in reversed(messages)]
+                transcript = "\n".join(transcript_lines[:50])
+                embed = discord.Embed(
+                    title="📋 Transcript do ticket",
+                    description=f"```\n{transcript[:1900]}\n```",
+                    color=discord.Color.red()
+                )
+                embed.set_footer(text=f"Canal: {interaction.channel.name} | Por: {interaction.user}")
+                await log_channel.send(embed=embed)
+            except Exception:
+                pass
+
+        await interaction.channel.delete()
 
 
 # ============================================================
