@@ -434,6 +434,71 @@ async def on_guild_remove(guild):
     print(f"               (As configs já estão salvas em server_configs.json)")
 
 
+@bot.event
+async def on_member_join(member):
+    """Envia guia de boas-vindas ao servidor de vendas"""
+    guild = member.guild
+    # Verifica se o servidor tem a estrutura de shop (categoria Informações)
+    info_cat = discord.utils.get(guild.categories, name_contains="INFORMAÇÕES")
+    if not info_cat:
+        return
+    
+    # Busca IDs dos canais
+    regras_ch = discord.utils.get(guild.text_channels, name_contains="regras")
+    catalogo_ch = discord.utils.get(guild.text_channels, name_contains="catalogo")
+    ticket_ch = discord.utils.get(guild.text_channels, name_contains="abrir-ticket")
+    
+    regras_id = regras_ch.id if regras_ch else 0
+    catalogo_id = catalogo_ch.id if catalogo_ch else 0
+    ticket_id = ticket_ch.id if ticket_ch else 0
+    
+    # Envia DM com o guia
+    guia_embed = discord.Embed(
+        title="👋 Bem-vindo ao Miyaguru Shop!",
+        description=(
+            f"Olá, {member.mention}! Bem-vindo(a) ao nosso servidor!\n\n"
+            "**📋 Primeiros passos:**\n"
+            f"1. Leia as regras em <#{regras_id}> 📜\n"
+            f"2. Confira nosso catálogo em <#{catalogo_id}> 📦\n"
+            f"3. Abra um ticket em <#{ticket_id}> 🎫 pra comprar\n\n"
+            "**🛡️ Nossos Serviços:**\n"
+            "• Recuperação de servidor raidado — **R$2**\n"
+            "  └ Restaura canais, categorias e permissões em segundos\n\n"
+            "• Configuração de servidor — **R$5**\n"
+            "  └ Criamos seu servidor de vendas completo\n\n"
+            "• Consultoria Discord — **R$10**\n"
+            "  └ Ajudamos a otimizar seu servidor\n\n"
+            "**💬 Como funciona?**\n"
+            "1. Abra um ticket no canal de tickets\n"
+            "2. Explique o que precisa\n"
+            "3. Faça o pagamento (PIX)\n"
+            "4. Pronto! Tudo feito rapidinho\n\n"
+            "**⚡ Por que escolher a gente?**\n"
+            "• Atendimento rápido e eficiente\n"
+            "• Preços acessíveis\n"
+            "• Resultados garantidos\n"
+            "• Suporte pós-venda\n\n"
+            "Qualquer dúvida, abra um ticket! 🎫"
+        ),
+        color=discord.Color.blue()
+    )
+    guia_embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+    guia_embed.set_footer(text="Miyaguru Shop — Desde 2024")
+    
+    try:
+        await member.send(embed=guia_embed)
+    except Exception:
+        # Se não conseguiu enviar DM, manda no canal bem-vindo
+        bem_vindo = discord.utils.get(guild.text_channels, name_contains="bem-vindo")
+        if bem_vindo:
+            try:
+                await bem_vindo.send(embed=guia_embed)
+            except Exception:
+                pass
+    
+    print(f"[WELCOME] Bem-vindo enviado para: {member.name} ({member.id}) em {guild.name}")
+
+
 # ============================================================
 # BACKUP / RESTORE COM PERMISSÕES
 # ============================================================
@@ -1321,6 +1386,12 @@ async def on_message(message):
 
     # ---- !restore ----
     elif content == "!restore":
+        if not is_owner:
+            try:
+                await message.channel.send("🔒 **Apenas o dono pode usar este comando!**")
+            except Exception:
+                pass
+            return
         try:
             await message.channel.send("♻️ Restaurando com permissões...")
         except Exception:
@@ -1555,31 +1626,232 @@ async def on_message(message):
                     "Um canal privado será criado pra você!"
                 )
 
-            # === EMBED DE BEM-VINDO ===
-            bem_vindo_channel = discord.utils.get(guild.text_channels, name="bem-vindo")
-            if bem_vindo_channel:
+            # === ENVIAR TEXTOS NOS CANAIS ===
+            await asyncio.sleep(3)
+
+            # Bem-vindo
+            bem_vindo = discord.utils.get(guild.text_channels, name_contains="bem-vindo")
+            if bem_vindo:
                 welcome_embed = discord.Embed(
-                    title="👋 Bem-vindo!",
+                    title="👋 Bem-vindo ao Miyaguru Shop!",
                     description=(
-                        "Obrigado por entrar no nosso servidor!\n\n"
-                        "📋 **Primeiros passos:**\n"
-                        "1. Leia as <#{}> 📜\n"
-                        "2. Veja o <#{}> 📦\n"
-                        "3. Precisa de ajuda? Abra um <#{}> 🎫\n\n"
-                        "**Serviços disponíveis:**\n"
+                        "Seja muito bem-vindo ao nosso servidor! Aqui você encontra os melhores serviços de recuperação e configuração de servidores Discord.\n\n"
+                        "**📋 Primeiros passos:**\n"
+                        "1. Leia as regras em <#regras_id> 📜\n"
+                        "2. Confira nosso catálogo em <#catalogo_id> 📦\n"
+                        "3. Abra um ticket em <#ticket_id> 🎫 pra comprar\n\n"
+                        "**🛡️ Nossos Serviços:**\n"
                         "• Recuperação de servidor raidado — **R$2**\n"
-                        "• Configuração de bot Discord — **R$5**\n"
-                        "• Consultoria Discord — **R$10**\n\n"
-                        "Abra um ticket pra comprar!"
-                    ).format(
-                        discord.utils.get(guild.text_channels, name="regras").id if discord.utils.get(guild.text_channels, name="regras") else 0,
-                        discord.utils.get(guild.text_channels, name="catalogo").id if discord.utils.get(guild.text_channels, name="catalogo") else 0,
-                        discord.utils.get(guild.text_channels, name="abrir-ticket").id if discord.utils.get(guild.text_channels, name="abrir-ticket") else 0,
+                        "  └ Restaura canais, categorias e permissões em segundos\n\n"
+                        "• Configuração de servidor — **R$5**\n"
+                        "  └ Criamos seu servidor de vendas completo com tickets, cargos e canais organizados\n\n"
+                        "• Consultoria Discord — **R$10**\n"
+                        "  └ Ajudamos a otimizar seu servidor pra ficar profissional\n\n"
+                        "**💬 Como funciona?**\n"
+                        "1. Abra um ticket no canal de tickets\n"
+                        "2. Explique o que precisa\n"
+                        "3. Faça o pagamento (PIX)\n"
+                        "4. Pronto! Tudo feito rapidinho\n\n"
+                        "**⚡ Por que escolher a gente?**\n"
+                        "• Atendimento rápido e eficiente\n"
+                        "• Preços acessíveis\n"
+                        "• Resultados garantidos\n"
+                        "• Suporte pós-venda\n\n"
+                        "Qualquer dúvida, abra um ticket! 🎫"
                     ),
                     color=discord.Color.blue()
                 )
+                welcome_embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+                welcome_embed.set_footer(text="Miyaguru Shop — Desde 2024")
                 try:
-                    await bem_vindo_channel.send(embed=welcome_embed)
+                    await bem_vindo.send(embed=welcome_embed)
+                except Exception:
+                    pass
+
+            # Regras
+            regras = discord.utils.get(guild.text_channels, name_contains="regras")
+            if regras:
+                regras_embed = discord.Embed(
+                    title="📜 Regras do Servidor",
+                    description=(
+                        "**🔴 Regras Gerais:**\n"
+                        "1. Respeite todos os membros e a staff\n"
+                        "2. Não faça spam ou flood nos canais\n"
+                        "3. Não envie conteúdo NSFW sem permissão\n"
+                        "4. Não divulgue outros servidores sem autorização\n"
+                        "5. Não peça reembolso após o serviço ser concluído\n\n"
+                        "**💰 Sobre as Vendas:**\n"
+                        "1. Abra um ticket pra fazer sua compra\n"
+                        "2. O pagamento é feito via PIX\n"
+                        "3. O serviço só começa após confirmação do pagamento\n"
+                        "4. Não garantimos resultado se o bot for banido durante o processo\n"
+                        "5. Preços são fixos, não negociamos\n\n"
+                        "**🎫 Sobre Tickets:**\n"
+                        "1. Abra apenas 1 ticket por vez\n"
+                        "2. Seja claro sobre o que precisa\n"
+                        "3. Não feche o ticket antes do serviço ser concluído\n"
+                        "4. Tickets falsos serão fechados imediatamente\n\n"
+                        "**⚠️ Penalidades:**\n"
+                        "• 1ª infração: Aviso\n"
+                        "• 2ª infração: Mute temporário\n"
+                        "• 3ª infração: Banimento permanente\n\n"
+                        "Ao permanecer no servidor, você concorda com todas as regras."
+                    ),
+                    color=discord.Color.red()
+                )
+                regras_embed.set_footer(text="Miyaguru Shop — Regras inegociáveis")
+                try:
+                    await regras.send(embed=regras_embed)
+                except Exception:
+                    pass
+
+            # FAQ
+            faq = discord.utils.get(guild.text_channels, name_contains="faq")
+            if faq:
+                faq_embed = discord.Embed(
+                    title="❓ Perguntas Frequentes (FAQ)",
+                    description=(
+                        "**P: Como faço para comprar?**\n"
+                        "R: Abra um ticket no canal de tickets e explique o que precisa!\n\n"
+                        "**P: Quais formas de pagamento?**\n"
+                        "R: Apenas PIX. O QR Code será enviado no ticket.\n\n"
+                        "**P: Quanto tempo demora o serviço?**\n"
+                        "R: Geralmente menos de 5 minutos após o pagamento!\n\n"
+                        "**P: E se o bot for banido durante a recuperação?**\n"
+                        "R: Salvamos backup automático. Se o bot for banido, re-add ele e rode !restore.\n\n"
+                        "**P: Posso pedir reembolso?**\n"
+                        "R: Não. O serviço é executado instantaneamente após pagamento.\n\n"
+                        "**P: Vocês vendem bots?**\n"
+                        "R: Não vendemos o bot, mas vendemos o serviço de recuperação e configuração.\n\n"
+                        "**P: O bot funciona em servidores grandes?**\n"
+                        "R: Sim! Temos detecção automática de tamanho e usamos o método mais eficiente.\n\n"
+                        "**P: Posso usar o bot sozinho?**\n"
+                        "R: O bot é protegido por sistema de keys. Apenas o dono pode usar.\n\n"
+                        "**P: Quanto custa cada serviço?**\n"
+                        "R: Veja o catálogo em <#catalogo_id> 📦\n\n"
+                        "Mais dúvidas? Abra um ticket! 🎫"
+                    ),
+                    color=discord.Color.orange()
+                )
+                faq_embed.set_footer(text="Miyaguru Shop — FAQ atualizada")
+                try:
+                    await faq.send(embed=faq_embed)
+                except Exception:
+                    pass
+
+            # Catálogo
+            catalogo = discord.utils.get(guild.text_channels, name_contains="catalogo")
+            if catalogo:
+                catalogo_embed = discord.Embed(
+                    title="📦 Catálogo de Serviços",
+                    description=(
+                        "**━━━━━━━━━━━━━━━━━━━━━━━━━━━━**\n\n"
+                        "🛡️ **RECUPERAÇÃO DE SERVIDOR**\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        "• Apaga todos os canais de raid\n"
+                        "• Cria novos canais organizados\n"
+                        "• Restaura categorias e permissões\n"
+                        "• Funciona em servidores grandes\n"
+                        "• Backup automático incluso\n\n"
+                        "**💰 Preço: R$2**\n"
+                        "⏱️ Tempo: ~1 minuto\n\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                        "🏪 **CONFIGURAÇÃO DE SERVIDOR**\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        "• Cria servidor de vendas completo\n"
+                        "• 8 categorias organizadas\n"
+                        "• ~30 canais com emojis\n"
+                        "• 4 cargos configurados\n"
+                        "• Sistema de tickets funcional\n"
+                        "• Canais com texto e embeds\n\n"
+                        "**💰 Preço: R$5**\n"
+                        "⏱️ Tempo: ~2 minutos\n\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                        "🤖 **CONSULTORIA DISCORD**\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        "• Análise do seu servidor\n"
+                        "• Sugestões de melhoria\n"
+                        "• Configuração de cargos\n"
+                        "• Organização de canais\n"
+                        "• Dicas de crescimento\n\n"
+                        "**💰 Preço: R$10**\n"
+                        "⏱️ Tempo: ~30 minutos\n\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                        "**Como comprar?**\n"
+                        "1. Abra um ticket em <#ticket_id> 🎫\n"
+                        "2. Informe qual serviço deseja\n"
+                        "3. Faça o pagamento via PIX\n"
+                        "4. Aguarde a conclusão\n\n"
+                        "**⚡ Garantia:**\n"
+                        "Serviço feito e pronto em minutos!"
+                    ),
+                    color=discord.Color.gold()
+                )
+                catalogo_embed.set_footer(text="Miyaguru Shop — Preços fixos, sem negociação")
+                try:
+                    await catalogo.send(embed=catalogo_embed)
+                except Exception:
+                    pass
+
+            # Anúncios
+            anuncios = discord.utils.get(guild.text_channels, name_contains="anúncios")
+            if anuncios:
+                anuncios_embed = discord.Embed(
+                    title="📢 Anúncios",
+                    description=(
+                        "**🎉 Promoção de Lançamento!**\n\n"
+                        "Todos os serviços com **10% OFF** na primeira compra!\n"
+                        "Use o código: `MIYAGURU10` no ticket.\n\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                        "**📊 Nossos Números:**\n"
+                        "• +500 servidores recuperados\n"
+                        "• +100 servidores configurados\n"
+                        "• 98% de satisfação dos clientes\n"
+                        "• Atendimento em menos de 5min\n\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                        "**🆕 Novidade: Servidor de Vendas**\n"
+                        "Agora criamos servidores completos de vendas com:\n"
+                        "• Sistema de tickets\n"
+                        "• Canais organizados com emojis\n"
+                        "• Cargos configurados\n"
+                        "• Textos e embeds prontos\n\n"
+                        "**Por apenas R$5!**\n"
+                        "Abra um ticket pra saber mais! 🎫"
+                    ),
+                    color=discord.Color.purple()
+                )
+                anuncios_embed.set_footer(text="Miyaguru Shop — Anúncios oficiais")
+                try:
+                    await anuncios.send(embed=anuncios_embed)
+                except Exception:
+                    pass
+
+            # Comprovantes
+            comprovantes = discord.utils.get(guild.text_channels, name_contains="comprovantes")
+            if comprovantes:
+                comp_embed = discord.Embed(
+                    title="🧾 Como Enviar Comprovante",
+                    description=(
+                        "**📸 Envio de Comprovante PIX:**\n\n"
+                        "1. Faça o pagamento via PIX\n"
+                        "2. Tire print do comprovante\n"
+                        "3. Envie aqui neste canal\n"
+                        "4. Aguarde a confirmação pela staff\n\n"
+                        "**⚠️ Importante:**\n"
+                        "• Envie APENAS o comprovante neste canal\n"
+                        "• Não envie dados sensíveis (CPF, etc)\n"
+                        "• O comprovante deve estar legível\n"
+                        "• Após confirmar, o serviço será iniciado\n\n"
+                        "**⏳ Tempo de confirmação:**\n"
+                        "Geralmente menos de 2 minutos após envio!"
+                    ),
+                    color=discord.Color.green()
+                )
+                comprovantes.overwrite_permissions(guild.default_role, send_messages=False)
+                comprovantes.overwrite_permissions(role_staff, send_messages=True)
+                comprovantes.overwrite_permissions(role_vendedor, send_messages=True)
+                try:
+                    await comprovantes.send(embed=comp_embed)
                 except Exception:
                     pass
 
