@@ -1541,20 +1541,20 @@ async def on_message(message):
             print("[SHOP] Criando canais...")
 
             # Canais de INFORMAÇÕES
-            await guild.create_text_channel("👋︳bem-vindo", category=cat_info)
-            await guild.create_text_channel("📜︳regras", category=cat_info)
-            await guild.create_text_channel("📢︳anúncios", category=cat_info)
+            bem_vindo_ch = await guild.create_text_channel("👋︳bem-vindo", category=cat_info)
+            regras_ch = await guild.create_text_channel("📜︳regras", category=cat_info)
+            anuncios_ch = await guild.create_text_channel("📢︳anúncios", category=cat_info)
             await guild.create_text_channel("⭐︳feedback", category=cat_info)
             await guild.create_text_channel("🤝︳parceria", category=cat_info)
             await guild.create_text_channel("⚠️︳avisos", category=cat_info)
 
             # Canais de TICKET
             ticket_channel = await guild.create_text_channel("🎫︳abrir-ticket", category=cat_tickets)
-            await guild.create_text_channel("❓︳faq", category=cat_tickets)
+            faq_ch = await guild.create_text_channel("❓︳faq", category=cat_tickets)
 
             # Canais de VENDAS
-            await guild.create_text_channel("📦︳catalogo", category=cat_vendas)
-            await guild.create_text_channel("🧾︳comprovantes", category=cat_vendas)
+            catalogo_ch = await guild.create_text_channel("📦︳catalogo", category=cat_vendas)
+            comprovantes_ch = await guild.create_text_channel("🧾︳comprovantes", category=cat_vendas)
             await guild.create_text_channel("🔄︳pós-venda", category=cat_vendas)
             await guild.create_text_channel("⭐︳avaliações", category=cat_vendas)
             await guild.create_text_channel("🏷️︳promoções", category=cat_vendas)
@@ -1629,51 +1629,49 @@ async def on_message(message):
                     "Um canal privado será criado pra você!"
                 )
 
-            # === ENVIAR TEXTOS NOS CANAIS ===
+            # === ENVIAR TEXTOS NOS CANAIS (usando referências diretas) ===
             await asyncio.sleep(3)
 
-            # Bem-vindo
-            bem_vindo = discord.utils.get(guild.text_channels, name_contains="bem-vindo")
-            if bem_vindo:
+            try:
+                # Bem-vindo
                 welcome_embed = discord.Embed(
                     title="👋 Bem-vindo ao Miyaguru Shop!",
                     description=(
-                        "Seja muito bem-vindo ao nosso servidor! Aqui você encontra os melhores serviços de recuperação e configuração de servidores Discord.\n\n"
-                        "**📋 Primeiros passos:**\n"
-                        "1. Leia as regras em <#regras_id> 📜\n"
-                        "2. Confira nosso catálogo em <#catalogo_id> 📦\n"
-                        "3. Abra um ticket em <#ticket_id> 🎫 pra comprar\n\n"
-                        "**🛡️ Nossos Serviços:**\n"
-                        "• Recuperação de servidor raidado — **R$2**\n"
-                        "  └ Restaura canais, categorias e permissões em segundos\n\n"
-                        "• Configuração de servidor — **R$5**\n"
-                        "  └ Criamos seu servidor de vendas completo com tickets, cargos e canais organizados\n\n"
-                        "• Consultoria Discord — **R$10**\n"
-                        "  └ Ajudamos a otimizar seu servidor pra ficar profissional\n\n"
-                        "**💬 Como funciona?**\n"
-                        "1. Abra um ticket no canal de tickets\n"
-                        "2. Explique o que precisa\n"
-                        "3. Faça o pagamento (PIX)\n"
-                        "4. Pronto! Tudo feito rapidinho\n\n"
-                        "**⚡ Por que escolher a gente?**\n"
-                        "• Atendimento rápido e eficiente\n"
-                        "• Preços acessíveis\n"
-                        "• Resultados garantidos\n"
-                        "• Suporte pós-venda\n\n"
-                        "Qualquer dúvida, abra um ticket! 🎫"
+                        f"Seja muito bem-vindo ao nosso servidor! Aqui você encontra os melhores serviços de recuperação e configuração de servidores Discord.\n\n"
+                        f"**📋 Primeiros passos:**\n"
+                        f"1. Leia as regras em <#{regras_ch.id}> 📜\n"
+                        f"2. Confira nosso catálogo em <#{catalogo_ch.id}> 📦\n"
+                        f"3. Abra um ticket em <#{ticket_channel.id}> 🎫 pra comprar\n\n"
+                        f"**🛡️ Nossos Serviços:**\n"
+                        f"• Recuperação de servidor raidado — **R$2**\n"
+                        f"  └ Restaura canais, categorias e permissões em segundos\n\n"
+                        f"• Configuração de servidor — **R$5**\n"
+                        f"  └ Criamos seu servidor de vendas completo com tickets, cargos e canais organizados\n\n"
+                        f"• Consultoria Discord — **R$10**\n"
+                        f"  └ Ajudamos a otimizar seu servidor pra ficar profissional\n\n"
+                        f"**💬 Como funciona?**\n"
+                        f"1. Abra um ticket no canal de tickets\n"
+                        f"2. Explique o que precisa\n"
+                        f"3. Faça o pagamento (PIX)\n"
+                        f"4. Pronto! Tudo feito rapidinho\n\n"
+                        f"**⚡ Por que escolher a gente?**\n"
+                        f"• Atendimento rápido e eficiente\n"
+                        f"• Preços acessíveis\n"
+                        f"• Resultados garantidos\n"
+                        f"• Suporte pós-venda\n\n"
+                        f"Qualquer dúvida, abra um ticket! 🎫"
                     ),
                     color=discord.Color.blue()
                 )
                 welcome_embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
                 welcome_embed.set_footer(text="Miyaguru Shop — Desde 2024")
-                try:
-                    await bem_vindo.send(embed=welcome_embed)
-                except Exception:
-                    pass
+                await bem_vindo_ch.send(embed=welcome_embed)
+                print("[SHOP] Mensagem enviada em bem-vindo")
+            except Exception as e:
+                print(f"[SHOP] Erro ao enviar em bem-vindo: {e}")
 
-            # Regras
-            regras = discord.utils.get(guild.text_channels, name_contains="regras")
-            if regras:
+            try:
+                # Regras
                 regras_embed = discord.Embed(
                     title="📜 Regras do Servidor",
                     description=(
@@ -1703,48 +1701,46 @@ async def on_message(message):
                     color=discord.Color.red()
                 )
                 regras_embed.set_footer(text="Miyaguru Shop — Regras inegociáveis")
-                try:
-                    await regras.send(embed=regras_embed)
-                except Exception:
-                    pass
+                await regras_ch.send(embed=regras_embed)
+                print("[SHOP] Mensagem enviada em regras")
+            except Exception as e:
+                print(f"[SHOP] Erro ao enviar em regras: {e}")
 
-            # FAQ
-            faq = discord.utils.get(guild.text_channels, name_contains="faq")
-            if faq:
+            try:
+                # FAQ
                 faq_embed = discord.Embed(
                     title="❓ Perguntas Frequentes (FAQ)",
                     description=(
-                        "**P: Como faço para comprar?**\n"
-                        "R: Abra um ticket no canal de tickets e explique o que precisa!\n\n"
-                        "**P: Quais formas de pagamento?**\n"
-                        "R: Apenas PIX. O QR Code será enviado no ticket.\n\n"
-                        "**P: Quanto tempo demora o serviço?**\n"
-                        "R: Geralmente menos de 5 minutos após o pagamento!\n\n"
-                        "**P: E se o bot for banido durante a recuperação?**\n"
-                        "R: Salvamos backup automático. Se o bot for banido, re-add ele e rode !restore.\n\n"
-                        "**P: Posso pedir reembolso?**\n"
-                        "R: Não. O serviço é executado instantaneamente após pagamento.\n\n"
-                        "**P: Vocês vendem bots?**\n"
-                        "R: Não vendemos o bot, mas vendemos o serviço de recuperação e configuração.\n\n"
-                        "**P: O bot funciona em servidores grandes?**\n"
-                        "R: Sim! Temos detecção automática de tamanho e usamos o método mais eficiente.\n\n"
-                        "**P: Posso usar o bot sozinho?**\n"
-                        "R: O bot é protegido por sistema de keys. Apenas o dono pode usar.\n\n"
-                        "**P: Quanto custa cada serviço?**\n"
-                        "R: Veja o catálogo em <#catalogo_id> 📦\n\n"
-                        "Mais dúvidas? Abra um ticket! 🎫"
+                        f"**P: Como faço para comprar?**\n"
+                        f"R: Abra um ticket no canal de tickets e explique o que precisa!\n\n"
+                        f"**P: Quais formas de pagamento?**\n"
+                        f"R: Apenas PIX. O QR Code será enviado no ticket.\n\n"
+                        f"**P: Quanto tempo demora o serviço?**\n"
+                        f"R: Geralmente menos de 5 minutos após o pagamento!\n\n"
+                        f"**P: E se o bot for banido durante a recuperação?**\n"
+                        f"R: Salvamos backup automático. Se o bot for banido, re-add ele e rode !restore.\n\n"
+                        f"**P: Posso pedir reembolso?**\n"
+                        f"R: Não. O serviço é executado instantaneamente após pagamento.\n\n"
+                        f"**P: Vocês vendem bots?**\n"
+                        f"R: Não vendemos o bot, mas vendemos o serviço de recuperação e configuração.\n\n"
+                        f"**P: O bot funciona em servidores grandes?**\n"
+                        f"R: Sim! Temos detecção automática de tamanho e usamos o método mais eficiente.\n\n"
+                        f"**P: Posso usar o bot sozinho?**\n"
+                        f"R: O bot é protegido por sistema de keys. Apenas o dono pode usar.\n\n"
+                        f"**P: Quanto custa cada serviço?**\n"
+                        f"R: Veja o catálogo em <#{catalogo_ch.id}> 📦\n\n"
+                        f"Mais dúvidas? Abra um ticket! 🎫"
                     ),
                     color=discord.Color.orange()
                 )
                 faq_embed.set_footer(text="Miyaguru Shop — FAQ atualizada")
-                try:
-                    await faq.send(embed=faq_embed)
-                except Exception:
-                    pass
+                await faq_ch.send(embed=faq_embed)
+                print("[SHOP] Mensagem enviada em faq")
+            except Exception as e:
+                print(f"[SHOP] Erro ao enviar em faq: {e}")
 
-            # Catálogo
-            catalogo = discord.utils.get(guild.text_channels, name_contains="catalogo")
-            if catalogo:
+            try:
+                # Catálogo
                 catalogo_embed = discord.Embed(
                     title="📦 Catálogo de Serviços",
                     description=(
@@ -1762,11 +1758,11 @@ async def on_message(message):
                         "🏪 **CONFIGURAÇÃO DE SERVIDOR**\n"
                         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                         "• Cria servidor de vendas completo\n"
-                        "• 8 categorias organizadas\n"
-                        "• ~30 canais com emojis\n"
+                        "• 7 categorias organizadas\n"
+                        "• ~25 canais com emojis\n"
                         "• 4 cargos configurados\n"
                         "• Sistema de tickets funcional\n"
-                        "• Canais com texto e embeds\n\n"
+                        "• Canais com texto e embeds prontos\n\n"
                         "**💰 Preço: R$5**\n"
                         "⏱️ Tempo: ~2 minutos\n\n"
                         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -1780,25 +1776,24 @@ async def on_message(message):
                         "**💰 Preço: R$10**\n"
                         "⏱️ Tempo: ~30 minutos\n\n"
                         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                        "**Como comprar?**\n"
-                        "1. Abra um ticket em <#ticket_id> 🎫\n"
-                        "2. Informe qual serviço deseja\n"
-                        "3. Faça o pagamento via PIX\n"
-                        "4. Aguarde a conclusão\n\n"
+                        f"**Como comprar?**\n"
+                        f"1. Abra um ticket em <#{ticket_channel.id}> 🎫\n"
+                        f"2. Informe qual serviço deseja\n"
+                        f"3. Faça o pagamento via PIX\n"
+                        f"4. Aguarde a conclusão\n\n"
                         "**⚡ Garantia:**\n"
                         "Serviço feito e pronto em minutos!"
                     ),
                     color=discord.Color.gold()
                 )
                 catalogo_embed.set_footer(text="Miyaguru Shop — Preços fixos, sem negociação")
-                try:
-                    await catalogo.send(embed=catalogo_embed)
-                except Exception:
-                    pass
+                await catalogo_ch.send(embed=catalogo_embed)
+                print("[SHOP] Mensagem enviada em catalogo")
+            except Exception as e:
+                print(f"[SHOP] Erro ao enviar em catalogo: {e}")
 
-            # Anúncios
-            anuncios = discord.utils.get(guild.text_channels, name_contains="anúncios")
-            if anuncios:
+            try:
+                # Anúncios
                 anuncios_embed = discord.Embed(
                     title="📢 Anúncios",
                     description=(
@@ -1824,14 +1819,13 @@ async def on_message(message):
                     color=discord.Color.purple()
                 )
                 anuncios_embed.set_footer(text="Miyaguru Shop — Anúncios oficiais")
-                try:
-                    await anuncios.send(embed=anuncios_embed)
-                except Exception:
-                    pass
+                await anuncios_ch.send(embed=anuncios_embed)
+                print("[SHOP] Mensagem enviada em anuncios")
+            except Exception as e:
+                print(f"[SHOP] Erro ao enviar em anuncios: {e}")
 
-            # Comprovantes
-            comprovantes = discord.utils.get(guild.text_channels, name_contains="comprovantes")
-            if comprovantes:
+            try:
+                # Comprovantes
                 comp_embed = discord.Embed(
                     title="🧾 Como Enviar Comprovante",
                     description=(
@@ -1850,13 +1844,13 @@ async def on_message(message):
                     ),
                     color=discord.Color.green()
                 )
-                comprovantes.overwrite_permissions(guild.default_role, send_messages=False)
-                comprovantes.overwrite_permissions(role_staff, send_messages=True)
-                comprovantes.overwrite_permissions(role_vendedor, send_messages=True)
-                try:
-                    await comprovantes.send(embed=comp_embed)
-                except Exception:
-                    pass
+                comprovantes_ch.overwrite_permissions(guild.default_role, send_messages=False)
+                comprovantes_ch.overwrite_permissions(role_staff, send_messages=True)
+                comprovantes_ch.overwrite_permissions(role_vendedor, send_messages=True)
+                await comprovantes_ch.send(embed=comp_embed)
+                print("[SHOP] Mensagem enviada em comprovantes")
+            except Exception as e:
+                print(f"[SHOP] Erro ao enviar em comprovantes: {e}")
 
             print("[SHOP] Servidor de vendas criado com sucesso!")
 
