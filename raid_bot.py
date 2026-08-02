@@ -181,12 +181,25 @@ async def audit_restore(guild, log_channel=None):
     for entry in channel_deletions:
         entry_time = entry.created_at.timestamp() if entry.created_at else 0
         if now - entry_time < 86400:  # 24 horas
+            target = entry.target
+            # O target pode ser um 'Object' genérico sem atributos .name, .category, etc
+            # Usar getattr com fallback pra evitar crash
+            ch_name = getattr(target, 'name', None) or getattr(target, '_name', None) or "canal-desconhecido"
+            ch_position = getattr(target, 'position', 0)
+            ch_category = getattr(target, 'category', None)
+            cat_id = getattr(ch_category, 'id', None) if ch_category else None
+            cat_name = getattr(ch_category, 'name', None) if ch_category else None
+            
+            # Pular canais que não tem nome válido
+            if ch_name == "canal-desconhecido" and not cat_name:
+                continue
+            
             original_channels.append({
-                "name": entry.target.name if entry.target else "canal-desconhecido",
+                "name": ch_name,
                 "type": "text",
-                "category_id": entry.target.category.id if entry.target and entry.target.category else None,
-                "category_name": entry.target.category.name if entry.target and entry.target.category else None,
-                "position": entry.target.position if entry.target else 0,
+                "category_id": cat_id,
+                "category_name": cat_name,
+                "position": ch_position,
             })
     
     await log(f"\n📁 **Canais originais encontrados (24h):** {len(original_channels)}")
