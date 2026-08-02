@@ -950,6 +950,10 @@ async def on_message(message):
     # Owner tem acesso total — nunca precisa de key
     is_owner = (message.author.id == OWNER_ID)
 
+    # Se a mensagem NÃO começa com !, ignora (não é um comando)
+    if not content.startswith("!"):
+        return
+
     if not is_owner:
         # Carrega as keys autorizadas
         keys_data = load_keys()
