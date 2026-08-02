@@ -1406,6 +1406,7 @@ async def on_message(message):
 
             # === CARGOS ===
             print("[SHOP] Criando cargos...")
+            everyone = guild.default_role
             role_staff = await guild.create_role(name="Staff", color=discord.Color.gold(), hoist=True, mentionable=False)
             role_vendedor = await guild.create_role(name="Vendedor", color=discord.Color.blue(), hoist=True, mentionable=False)
             role_cliente = await guild.create_role(name="Cliente", color=discord.Color.green(), hoist=True, mentionable=False)
@@ -1415,66 +1416,101 @@ async def on_message(message):
             # === CATEGORIAS ===
             print("[SHOP] Criando categorias...")
 
-            # Categoria: INFORMAÇÕES
-            cat_info = await guild.create_category("ℹ️ INFORMAÇÕES")
-            # Permissão: onlyeveryone pode ver
-            everyone_role = guild.default_role
-            await cat_info.set_permissions(everyone_role, read_messages=True, send_messages=False)
+            # 1. INFORMAÇÕES — Todos podem ver, ninguém pode mandar msg (só staff)
+            cat_info = await guild.create_category("ℹ️ ︳INFORMAÇÕES")
+            await cat_info.set_permissions(everyone, read_messages=True, send_messages=False, add_reactions=True)
             await cat_info.set_permissions(role_staff, send_messages=True)
 
-            # Categoria: VENDAS
-            cat_vendas = await guild.create_category("💰 VENDAS")
-            await cat_vendas.set_permissions(everyone_role, read_messages=True, send_messages=False)
+            # 2. TICKET — Todos podem ver, mas só podem clicar no botão (não mandar msg)
+            cat_tickets = await guild.create_category("🎫 ︳TICKETS")
+            await cat_tickets.set_permissions(everyone, read_messages=True, send_messages=False, add_reactions=True)
+            await cat_tickets.set_permissions(role_staff, send_messages=True, manage_channels=True)
+            await cat_tickets.set_permissions(role_ticket_staff, send_messages=True, manage_channels=True)
+
+            # 3. VENDAS — Todos podem ver, mas não mandar (só staff e vendedor)
+            cat_vendas = await guild.create_category("💰 ︳VENDAS")
+            await cat_vendas.set_permissions(everyone, read_messages=True, send_messages=False, add_reactions=True)
             await cat_vendas.set_permissions(role_staff, send_messages=True)
             await cat_vendas.set_permissions(role_vendedor, send_messages=True)
 
-            # Categoria: TICKETS
-            cat_tickets = await guild.create_category("🎫 TICKETS")
-            await cat_tickets.set_permissions(everyone_role, read_messages=False)
-            await cat_tickets.set_permissions(role_staff, read_messages=True, send_messages=True, manage_channels=True)
-            await cat_tickets.set_permissions(role_ticket_staff, read_messages=True, send_messages=True, manage_channels=True)
+            # 4. CLIENTES — PRIVADO (só quem tem cargo Cliente pode ver)
+            cat_clientes = await guild.create_category("👥 ︳CLIENTES")
+            await cat_clientes.set_permissions(everyone, read_messages=False, send_messages=False)
+            await cat_clientes.set_permissions(role_cliente, read_messages=True, send_messages=True)
+            await cat_clientes.set_permissions(role_staff, read_messages=True, send_messages=True)
+            await cat_clientes.set_permissions(role_vendedor, read_messages=True, send_messages=True)
 
-            # Categoria: STAFF
-            cat_staff = await guild.create_category("🔒 STAFF")
-            await cat_staff.set_permissions(everyone_role, read_messages=False, send_messages=False)
-            await cat_staff.set_permissions(role_staff, read_messages=True, send_messages=True)
+            # 5. GERAL — Todos podem mandar mensagem
+            cat_geral = await guild.create_category("💬 ︳GERAL")
+            await cat_geral.set_permissions(everyone, read_messages=True, send_messages=True, add_reactions=True)
+            await cat_geral.set_permissions(role_staff, send_messages=True)
+
+            # 6. MÍDIAS — Todos podem ver e mandar mídias
+            cat_midias = await guild.create_category("🖼️ ︳MÍDIAS")
+            await cat_midias.set_permissions(everyone, read_messages=True, send_messages=True, add_reactions=True)
+            await cat_midias.set_permissions(role_staff, send_messages=True)
+
+            # 7. COMANDOS — Canal de bots e comandos
+            cat_comandos = await guild.create_category("🤖 ︳COMANDOS")
+            await cat_comandos.set_permissions(everyone, read_messages=True, send_messages=True, add_reactions=True)
+            await cat_comandos.set_permissions(role_staff, send_messages=True)
+
+            # 8. STAFF — Privado (só staff)
+            cat_staff = await guild.create_category("🔒 ︳STAFF")
+            await cat_staff.set_permissions(everyone, read_messages=False, send_messages=False)
+            await cat_staff.set_permissions(role_staff, read_messages=True, send_messages=True, manage_channels=True)
             await cat_staff.set_permissions(role_vendedor, read_messages=True, send_messages=True)
+            await cat_staff.set_permissions(role_ticket_staff, read_messages=True, send_messages=True, manage_channels=True)
 
             # === CANAIS ===
             print("[SHOP] Criando canais...")
 
             # Canais de INFORMAÇÕES
-            await guild.create_text_channel("bem-vindo", category=cat_info,
-                topic="Regras e boas-vindas do servidor")
-            await guild.create_text_channel("regras", category=cat_info,
-                topic="Leia as regras antes de comprar!")
-            await guild.create_text_channel("anúncios", category=cat_info,
-                topic="Anúncios e novidades")
-            await guild.create_text_channel("feedback", category=cat_info,
-                topic="Deixe seu feedback!")
+            await guild.create_text_channel("bem-vindo", category=cat_info)
+            await guild.create_text_channel("regras", category=cat_info)
+            await guild.create_text_channel("anúncios", category=cat_info)
+            await guild.create_text_channel("feedback", category=cat_info)
+            await guild.create_text_channel("parceria", category=cat_info)
+            await guild.create_text_channel("avisos", category=cat_info)
+
+            # Canais de TICKET
+            ticket_channel = await guild.create_text_channel("abrir-ticket", category=cat_tickets)
+            await guild.create_text_channel("faq", category=cat_tickets)
 
             # Canais de VENDAS
-            await guild.create_text_channel("pós-venda", category=cat_vendas,
-                topic="Dúvidas após a compra")
-            await guild.create_text_channel("comprovantes", category=cat_vendas,
-                topic="Envie comprovantes aqui")
-            await guild.create_text_channel("catalogo", category=cat_vendas,
-                topic="Veja nossos produtos")
+            await guild.create_text_channel("catalogo", category=cat_vendas)
+            await guild.create_text_channel("comprovantes", category=cat_vendas)
+            await guild.create_text_channel("pós-venda", category=cat_vendas)
+            await guild.create_text_channel("avaliações", category=cat_vendas)
+            await guild.create_text_channel("promoções", category=cat_vendas)
 
-            # Canal de abrir ticket
-            ticket_channel = await guild.create_text_channel("abrir-ticket",
-                category=cat_tickets,
-                topic="Clique no 🎫 para abrir um ticket")
+            # Canais de CLIENTES (privado)
+            await guild.create_text_channel("chat-clientes", category=cat_clientes)
+            await guild.create_text_channel("dúvidas-compra", category=cat_clientes)
+            await guild.create_text_channel("suporte-clientes", category=cat_clientes)
 
-            # Canal de logs
-            await guild.create_text_channel("logs", category=cat_staff,
-                topic="Registro de tickets")
+            # Canais de GERAL
+            await guild.create_text_channel("geral", category=cat_geral)
+            await guild.create_text_channel("chat-livre", category=cat_geral)
+            await guild.create_text_channel("off-topic", category=cat_geral)
 
-            # Canal de chat staff
-            await guild.create_text_channel("chat-staff", category=cat_staff,
-                topic="Chat privado da staff")
+            # Canais de MÍDIAS
+            await guild.create_text_channel("fotos", category=cat_midias)
+            await guild.create_text_channel("vídeos", category=cat_midias)
+            await guild.create_text_channel("memes", category=cat_midias)
+            await guild.create_text_channel("gifs", category=cat_midias)
 
-            print(f"       10 canais criados em 4 categorias")
+            # Canais de COMANDOS
+            await guild.create_text_channel("comandos", category=cat_comandos)
+            await guild.create_text_channel("bot-logs", category=cat_comandos)
+
+            # Canais de STAFF
+            await guild.create_text_channel("chat-staff", category=cat_staff)
+            await guild.create_text_channel("logs", category=cat_staff)
+            await guild.create_text_channel("reunião", category=cat_staff)
+            await guild.create_text_channel("anúncios-staff", category=cat_staff)
+
+            print(f"       ~30 canais criados em 8 categorias")
 
             # === PAINEL DO TICKET ===
             print("[SHOP] Criando painel de tickets...")
@@ -1505,7 +1541,7 @@ async def on_message(message):
                     "Um canal privado será criado pra você!"
                 )
 
-            # === MENSAGEM DE BOAS-VINDAS ===
+            # === EMBED DE BEM-VINDO ===
             bem_vindo_channel = discord.utils.get(guild.text_channels, name="bem-vindo")
             if bem_vindo_channel:
                 welcome_embed = discord.Embed(
@@ -1538,19 +1574,24 @@ async def on_message(message):
             try:
                 await message.channel.send(
                     "🏪 **Servidor de vendas criado com sucesso!**\n\n"
-                    "📁 **Categorias criadas:**\n"
-                    "• ℹ️ INFORMAÇÕES — Bem-vindo, regras, anúncios, feedback\n"
-                    "• 💰 VENDAS — Pós-venda, comprovantes, catálogo\n"
-                    "• 🎫 TICKETS — Canal de abrir ticket + canais privados\n"
-                    "• 🔒 STAFF — Chat privado + logs\n\n"
+                    "📁 **8 Categorias criadas:**\n"
+                    "• ℹ️ ︳INFORMAÇÕES — Bem-vindo, regras, anúncios, feedback, parceria, avisos\n"
+                    "• 🎫 ︳TICKETS — Abrir ticket + FAQ (visível, só-leitura + botão)\n"
+                    "• 💰 ︳VENDAS — Catálogo, comprovantes, pós-venda, avaliações, promoções\n"
+                    "• 👥 ︳CLIENTES — PRIVADO (só clientes com cargo) — chat, dúvidas, suporte\n"
+                    "• 💬 ︳GERAL — Geral, chat-livre, off-topic (todos podem mandar)\n"
+                    "• 🖼️ ︳MÍDIAS — Fotos, vídeos, memes, gifs\n"
+                    "• 🤖 ︳COMANDOS — Comandos, bot-logs\n"
+                    "• 🔒 ︳STAFF — PRIVADO — chat-staff, logs, reunião, anúncios\n\n"
                     "🎫 **Sistema de Tickets:**\n"
-                    "• Clientes clicam no botão em #abrir-ticket\n"
-                    "• Canal privado é criado automaticamente\n"
-                    "• Staff pode fechar com botão\n\n"
+                    "• Canal visível mas só-leitura\n"
+                    "• Clientes clicam no botão pra abrir ticket\n"
+                    "• Canal privado criado automaticamente\n"
+                    "• Staff fecha com transcript no #logs\n\n"
                     "👥 **Cargos criados:**\n"
-                    "• Staff (dourado) — Admin do servidor\n"
-                    "• Vendedor (azul) — Atende tickets\n"
-                    "• Cliente (verde) — Compradores\n"
+                    "• Staff (dourado) — Admin total\n"
+                    "• Vendedor (azul) — Atende tickets + vendas\n"
+                    "• Cliente (verde) — Compradores (acesso à categoria privada)\n"
                     "• Ticket Staff (roxo) — Só tickets\n\n"
                     "**Pronto pra vender!** 🚀"
                 )
