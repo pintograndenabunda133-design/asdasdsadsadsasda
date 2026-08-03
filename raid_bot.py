@@ -549,7 +549,8 @@ async def on_ready():
 
 @bot.event
 async def on_guild_join(guild):
-    """Quando o bot entra num servidor novo, escaneia e salva as configs automaticamente"""
+    """Quando o bot entra num servidor novo, escaneia e salva as configs automaticamente.
+    NÃO sobrescreve backup existente (protege backup original contra raid/nuke)."""
     print(f"\n[GUILD JOIN] Bot adicionado ao servidor: {guild.name} ({guild.id})")
     print(f"             Dono: {guild.owner} ({guild.owner_id})")
     print(f"             Membros: {guild.member_count}")
@@ -559,6 +560,23 @@ async def on_guild_join(guild):
         cat_count = len(guild.categories)
         role_count = len([r for r in guild.roles if not r.is_default()])
         print(f"[SCAN] {ch_count} canais | {cat_count} categorias | {role_count} roles")
+        
+        # Verificar se já existe backup para este servidor
+        configs = load_server_configs()
+        existing = configs["servers"].get(str(guild.id))
+        
+        if existing:
+            existing_channels = existing.get("channels", [])
+            first_name = existing_channels[0].get("name", "") if existing_channels else ""
+            raid_names = ["hacked", "hacked-by-miyaguru", "r-a-i-d", "dominado-por-miyaguru"]
+            
+            # Se o backup existente é do mesmo servidor e NÃO é raid, não sobrescreve
+            if existing.get("guild_id") == guild.id and first_name not in raid_names:
+                print(f"[GUILD JOIN] ✅ Backup existente encontrado ({len(existing_channels)} canais) — não sobrescrevendo!")
+                return
+            else:
+                print(f"[GUILD JOIN] Backup existente parece ser de raid — atualizando...")
+        
         config = await save_server_config(guild)
         print(f"[GUILD JOIN] ✅ Configs salvas automaticamente!")
     except Exception as e:
@@ -1530,13 +1548,59 @@ async def on_message(message):
 
         print(f"\n[RESTORE] Iniciando restauração SMART no servidor: {guild.name}")
 
+        raid_channel_names = ["hacked", "hacked-by-miyaguru", "r-a-i-d", "dominado-por-miyaguru"]
+
+        def is_raid_backup(data):
+            """Verifica se o backup/config é de um servidor raidado/nukeado"""
+            if not data:
+                return False
+            channels = data.get("channels", [])
+            if not channels:
+                return False
+            first_name = channels[0].get("name", "")
+            # Se o primeiro canal é um nome de raid, é backup raidado
+            if first_name in raid_channel_names:
+                return True
+            # Se tem mais de 30 canais e o primeiro é genérico (canal-0, canal-1...), provavelmente é raid
+            if len(channels) > 30:
+                first_two = channels[0].get("name", "")
+                if first_two.startswith("canal-") or first_two.startswith("spam-"):
+                    return True
+            return False
+
         # FASE 1: Verificar se tem backup local
         has_local_backup = os.path.exists(BACKUP_FILE)
         # FASE 2: Verificar se tem config persistente
         configs = load_server_configs()
         has_config = str(guild.id) in configs.get("servers", {})
-
+        
+        # Verificar se o backup é raidado
+        backup_is_raid = False
         if has_local_backup:
+            try:
+                with open(BACKUP_FILE, "r", encoding="utf-8") as f:
+                    backup_data = json.load(f)
+                backup_is_raid = is_raid_backup(backup_data)
+            except Exception:
+                pass
+        elif has_config:
+            config_data = configs["servers"].get(str(guild.id))
+            backup_is_raid = is_raid_backup(config_data)
+
+        if backup_is_raid:
+            # Backup é de servidor raidado — ignorar e criar servidor limpo
+            print("[RESTORE] ⚠️ Backup detectado como RAIDADO — usando servidor limpo!")
+            try:
+                await message.channel.send(
+                    "♻️ **Modo SMART — Backup parece ser de servidor raidado!**\n"
+                    "🔨 Ignorando backup raidado — criando servidor limpo..."
+                )
+            except Exception:
+                pass
+            print("[RESTORE] Criando servidor limpo...")
+            success, msg = await smart_clean_restore(guild)
+
+        elif has_local_backup:
             # Método 1: Backup local (mais completo)
             try:
                 await message.channel.send("♻️ **Modo SMART — Restaurando do backup local...**")
